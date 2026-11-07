@@ -67,6 +67,8 @@ We provide a complete, `0 sorry` Lean 4 formalization and soundness proof of **K
 │   ├── Stage2/
 │   │   ├── Stage2A_CompositionalTermination.lean # Stage 2A: SCT-to-Lean bridge, dual lowering, custom commands
 │   │   └── Stage2B_ComputationalCodata.lean # Stage 2B: Computational codata (CStream, Colist, CoTree, SP), bisimulation, corec macro
+│   ├── Stage3/
+│   │   └── Stage3_KernelExtensionAndConsistency.lean # Tier 3 & Stage 3: Quot/Choice/UIP consistency + native guarded kernel reduction
 │   └── Audits/                              # Standalone 0-sorry counterexamples to V1/V2 formulations
 ├── docs/
 │   ├── SOUNDNESS_AUDITS_AND_REPAIRS.md      # Synthesis of counterexamples & V5 metatheoretical fixes
@@ -124,3 +126,15 @@ At the end of [`Solutions/V5/Final.lean`](Solutions/V5/Final.lean), `#print axio
     - `SP α β` (Ghani–Hancock–Pattinson mixed inductive-coinductive stream processors with `SPStep`, `SP.corec`, `head_run_corec_put`, `tail_run_corec_put`, `pairSumSP_nats_rfl`).
   - **Coinduction Proof Principles (`eq_of_bisim`, `bisim_iff_eq`)**: Proves bisimulation sound and complete for `CStream α`, `Colist α`, and `CoTree β α`, demonstrated on `CStream.interleave_evens_odds` and `blinkStream_tail_tail_eq`.
   - **Custom `corec_stream_def` Command Macro**: Elaborates productive corecursive stream definitions (`zerosStream`, `blinkStream`, `fibStream`) and synthesizes `@[simp]` `.head`/`.tail` unfolding equations with kernel `rfl` evaluation (`fibStream_take_8_rfl`).
+
+### 6. Tier 3 & Stage 3: Relative Consistency with `Quot`/`Choice`/`UIP` & Native Guarded Kernel Reduction (`0 sorry`)
+- **[`Solutions/Stage3/Stage3_KernelExtensionAndConsistency.lean`](Solutions/Stage3/Stage3_KernelExtensionAndConsistency.lean) (Tier 3 & Stage 3)**:
+  - **Tier 3 Relative Consistency with Lean 4 Core Features**:
+    - `Prop` proof irrelevance & UIP coherence across universe levels (`size_bound_proof_irrel_rfl`, `uip_size_coherent`),
+    - Quotients (`Quot`) and relational size irrelevance: proves both the negative inconsistency trap (`size_sensitive_quot_lift_inconsistent`) and the positive consistency & erasure-isomorphism theorem (`quot_lift_size_irrelevant_sound`),
+    - Master relative consistency certificate (`tier3_relative_consistency`).
+  - **Stage 3 Native Constructor/Destructor-Guarded Kernel Reduction (`KernelTm`, `whnfStep`, `kernelWhnf`, `kernelDefEqB`)**:
+    - Proves open-term WHNF termination on neutral fixpoints and unprojected cofixpoints (`neutral_fixMu_is_whnf`, `unprojected_cofixNu_is_whnf`),
+    - Proves determinism (`whnfStep_deterministic`), Church–Rosser confluence (`whnfStepStar_confluent`), and conversion soundness (`kernelWhnf_defEq_sound`),
+    - Proves direct embedding into `NishtAbel2024V5`'s operational semantics and strong normalization theorem (`stage3_guarded_rules_sn_in_v5`),
+    - Verifies symbolic open-term conversion (`test_stage3_open_symbolic_add_rfl`), lazy coinductive stream unfolding (`test_stage3_cofix_blink_tail_tail_rfl`), and mixed inductive-coinductive reduction (`test_stage3_combined_mu_nu_rfl`) by kernel `rfl`.
