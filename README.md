@@ -63,6 +63,9 @@ We provide a complete, `0 sorry` Lean 4 formalization and soundness proof of **K
 │   │   └── Milestone1_2_VerifiedElaboration.lean # Verified elaboration E(t), dual lowering, SCT WF lowering
 │   ├── Stage1/
 │   │   └── MiniLeanSized.lean               # Executable bidirectional size-change checker + soundness + regression suite
+│   ├── Stage2/
+│   │   ├── Stage2A_CompositionalTermination.lean # Stage 2A: SCT-to-Lean bridge, dual lowering, custom commands
+│   │   └── Stage2B_ComputationalCodata.lean # Stage 2B: Computational codata (CStream, Colist, CoTree, SP), bisimulation, corec macro
 │   └── Audits/                              # Standalone 0-sorry counterexamples to V1/V2 formulations
 ├── docs/
 │   ├── SOUNDNESS_AUDITS_AND_REPAIRS.md      # Synthesis of counterexamples & V5 metatheoretical fixes
@@ -103,3 +106,17 @@ At the end of [`Solutions/V5/Final.lean`](Solutions/V5/Final.lean), `#print axio
   - **Complete Executable Algorithm 2 Pipeline**: Implements executable boolean/option checkers for `Unsized` (`unsizedB`), polarized higher-kinded kind inference (`inferKindB`, `checkKindB`, `ekindingB`, `allPosFunctorsB`), signature encoding (`encodeTyB`, `encodeDeclB`, `encodeBlockB`), pattern & copattern spine inference (`inferPatB`, `inferSpineB`), bidirectional type comparison with $\beta$-reduction (`compareTyB2`), bidirectional term & clause inference (`inferTmB`, `checkTmB`, `checkClauseB`), and certified Size-Change Termination closure (`checkSCTB`, `checkBlockB`).
   - **End-to-End Soundness Theorem (`checkBlockB_sound`)**: Proves (`0 sorry`) that `checkBlockB fuel sig Ξ = true` implies `Algorithm2Accepts sig Ξ Ξannot`, declarative typing in System $F_\omega^{\text{cop,SCT}}$ (`BlockTy sig Ξannot`), and semantic strong normalization / productivity (`SemValid W Ξannot` via Theorem 15).
   - **Kernel-Checked (`rfl`) Regression Suite**: Accepts structural recursion (`test_P1_copy_accepted`), productive stream combinators (`test_P2_streams_accepted`), polymorphic list recursion (`test_P3_len_accepted`), mutual recursion (`test_P4_evenOdd_accepted`), higher-order polymorphic rose-tree traversal (`test_P5_mapRose_accepted`), and mixed-variance $\beta$-redex blocks (`test_P6_evalBush_accepted`), while statically rejecting Agda #3026 (`test_N1_agda3026_rejected`), unguarded streams (`test_N2_nonProductiveStream_rejected`), Agda #7178 negative fixpoints (`test_N3_agda7178_negFix_rejected`), and non-terminating mutual cycles (`test_N4_badMutual_rejected`).
+
+### 5. Stage 2A & 2B: Lean 4 Compositional Termination & Computational Codata in `Type` (`0 sorry`)
+- **[`Solutions/Stage2/Stage2A_CompositionalTermination.lean`](Solutions/Stage2/Stage2A_CompositionalTermination.lean) (Stage 2A)**:
+  - **Verified `MiniLean-Sized` to Lean 4 Bridge (`checkBlockB_sctValid`, `checkBlockB_callRel_wf`, `checkBlockB_natCallRel_wf`, `elaborateNatSCTBlock`)**: Directly turns `checkBlockB fuel sig Ξ = true` (proved by `rfl`) into kernel-checked `SCTValid` and `WellFounded` certificates for both ordinal (`CallRel`) and `Nat`-indexed (`NatCallRel`) call relations.
+  - **Dual Lowering Pipeline (`lowerNatBrecOn_eq_lowerNatWF`) & Kernel `rfl` Benchmarks**: Lowers size-bounded definitions via `Nat.brecOn` (preserving kernel `rfl` reduction on `divBrecOn_10_2_rfl`, `gcdBrecOn_1071_462_rfl`, `log2BrecOn_16_rfl`), structurally bounded higher-order rose-tree combinators (`filterTransformChildren`, `pruneMapRose_rfl_benchmark`), and general mutual SCT `WellFounded.fix` lowering (`evenOddSCT`, `evenSCT_succ`, `oddSCT_succ`).
+  - **Custom Lean 4 Elaboration Macros (`sized_block_cert`, `sized_brec_def`)**: Runs `MiniLean-Sized` at elaboration time, formats inferred size-change graphs, and emits `_accepted`, `_sct`, and `_wf` certificates alongside `@[simp]` unfolding equations (`copyCert`, `streamsCert`, `mapRoseCert`, `sizedStepSum_10_2_rfl`).
+- **[`Solutions/Stage2/Stage2B_ComputationalCodata.lean`](Solutions/Stage2/Stage2B_ComputationalCodata.lean) (Stage 2B)**:
+  - **Full Computational Codata Suite in `Type u`**:
+    - `CStream α` (infinite streams lowered from sized approximations `SizedStream α i` and inflationary `ProductiveStreamSpec α`, with definitional `rfl` destructor equations for `cons`, `corec`, `const`, `map`, `zipWith`, `interleave`, `evens`, `odds`),
+    - `Colist α` (potentially terminating finite-or-infinite codata with `nil`, `cons`, `head?`, `tail`, `corec`, `map`, `countdown_5_take_10_rfl`),
+    - `CoTree β α` (infinitely deep branching trees with `root`, `child`, `corec`, `map`, `binaryHeapTree_rfl_benchmark`),
+    - `SP α β` (Ghani–Hancock–Pattinson mixed inductive-coinductive stream processors with `SPStep`, `SP.corec`, `head_run_corec_put`, `tail_run_corec_put`, `pairSumSP_nats_rfl`).
+  - **Coinduction Proof Principles (`eq_of_bisim`, `bisim_iff_eq`)**: Proves bisimulation sound and complete for `CStream α`, `Colist α`, and `CoTree β α`, demonstrated on `CStream.interleave_evens_odds` and `blinkStream_tail_tail_eq`.
+  - **Custom `corec_stream_def` Command Macro**: Elaborates productive corecursive stream definitions (`zerosStream`, `blinkStream`, `fibStream`) and synthesizes `@[simp]` `.head`/`.tail` unfolding equations with kernel `rfl` evaluation (`fibStream_take_8_rfl`).
