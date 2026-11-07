@@ -1,0 +1,4403 @@
+Type-Based Termination Checking
+in Agda
+
+Master’s thesis in Computer science and engineering
+
+Kanstantsin Nisht
+
+Department of Computer Science and Engineering
+Chalmers University of Technology
+University of Gothenburg
+Gothenburg, Sweden 2024
+
+Master’s thesis 2024
+
+Type-Based Termination Checking
+in Agda
+Kanstantsin Nisht
+
+Department of Computer Science and Engineering
+Chalmers University of Technology
+University of Gothenburg
+Gothenburg, Sweden 2024
+
+Type-Based Termination Checking in Agda
+Kanstantsin Nisht
+
+© Kanstantsin Nisht, 2024.
+
+Supervisor: Andreas Abel, Department of Computer Science and Engineering
+Examiner: Thierry Coquand, Department of Computer Science and Engineering
+
+Master’s Thesis 2024
+Department of Computer Science and Engineering
+Chalmers University of Technology and University of Gothenburg
+SE-412 96 Gothenburg
+Telephone +46 31 772 1000
+
+Typeset in LATEX
+Gothenburg, Sweden 2024
+iv
+
+Type-Based Termination Checking in Agda
+Kanstantsin Nisht
+Department of Computer Science and Engineering
+Chalmers University of Technology and University of Gothenburg
+
+Abstract
+We present a description of a type-based termination checker for the dependentlytyped language Agda.
+Our termination checker uses System Fωcop, SCT as the semantical foundation – a variant of strongly-normalizing higher-order polymorphic lambda calculus with pattern
+and copattern matching. In this work, we provide a proof of strong normalization
+for System Fωcop, SCT , which is based on Girard-Tait reducibility candidates in combination with the Size-Change Principle applied to well-founded sized types.
+We also provide an algorithm of size annotation inference for terms written in System
+Fω , and prove its soundness. The algorithm has linear time complexity depending
+on the size of the syntax, which makes it admissible for practical implementation.
+This work also discusses our implementation of the outlined algorithm for Agda, and
+we show that the proposed termination checker features acceptable performance and
+significant increase in expressivity of termination checking for proof assistants.
+
+Keywords: Termination, type theory, proof assistants, sized types, size-change principle.
+v
+
+Contents
+
+1 Introduction
+1.1 Existing Approaches . . . . . . . . . . . . . . . . . . . . . . . . . . .
+1.2 Contribution . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+1.3 Structure . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+1
+2
+3
+3
+
+2 Background
+5
+2.1 Lambda Calculus . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+2.2 System Fω . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+2.3 Dependent Types . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+2.4 Agda . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+2.5 Termination Checker . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+2.6 Sized Types . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+3 Main Idea
+13
+3.1 Induction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+3.2 Coinduction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+4 Syntax
+4.1 Kinds and Sizes . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+4.2 Types . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+4.3 (Co)patterns . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+4.4 Invocation Graphs . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+4.5 Terms . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+4.6 Declarations . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+19
+19
+23
+25
+26
+27
+29
+
+5 Semantics
+5.1 Reduction Relation . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+5.2 Strong Normalization of System Fωcop . . . . . . . . . . . . . . . . . .
+5.3 Semantics of Invocation Graphs . . . . . . . . . . . . . . . . . . . . .
+5.4 Strong Normalization of System Fωcop, SCT . . . . . . . . . . . . . . . .
+5.5 Comparison of System Fωcop and System Fωcop, SCT . . . . . . . . . . .
+
+31
+31
+32
+34
+35
+38
+
+6 Inference
+6.1 Function Signature . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+6.2 (Co)pattern Matching . . . . . . . . . . . . . . . . . . . . . . . . . .
+6.3 Call-Site Inference . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+41
+41
+44
+48
+vii
+
+Contents
+6.4
+6.5
+6.6
+6.7
+
+Constraint Solving . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+Termination Checking of Definitions . . . . . . . . . . . . . . . . . .
+Non-triviality . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+Size Preservation . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+56
+59
+60
+61
+
+7 Implementation
+7.1 Architecture . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+7.2 Alternative Approaches . . . . . . . . . . . . . . . . . . . . . . . . . .
+7.3 Existing Termination Checkers . . . . . . . . . . . . . . . . . . . . .
+7.4 Performance . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+65
+65
+67
+67
+68
+
+8 Related and Future Work
+71
+8.1 Related Work . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 71
+8.2 Future Work . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 73
+9 Conclusion
+75
+9.1 Results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 75
+9.2 Discussion . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 75
+Bibliography
+
+77
+
+A Appendix
+
+I
+
+viii
+
+1
+Introduction
+Termination checking holds significant importance within the field of programming
+language theory. At its core, it involves determining whether a function finishes
+its execution for all possible input values. Notably, this problem has been formally
+proven to be undecidable by Turing et al. [1936].
+Nonetheless, there exists a motivation to address this challenge to some extent.
+Specifically, it is often feasible to generate a termination certificate — an evidence
+that a function does terminate. It is important to note, however, that it is not
+possible to provide termination certificates for all computable functions.
+One particularly valuable application of termination checking emerges within the
+domain of dependently typed languages. These languages extend lambda calculus by
+allowing types to depend on terms, thereby significantly enhancing expressiveness
+of the type system. In particular, within these languages it is possible to prove
+mathematical theorems. However, the type-checking process is tightly coupled with
+evaluation – if a type uses a function, how can we know that a function is safe to
+evaluate? In other words, we need to know that a function is terminating in order
+to use it in the type signature. Having non-terminating functions would make the
+problem of type checking of dependently typed terms undecidable, which is a major
+obstacle for implementing dependently typed languages as computer programs.
+Another usage of termination checking in dependently typed languages lies in the
+theoretical aspect. The ability to define recursive functions is important as it enables
+mathematical induction, which is foundational in mathematical reasoning. The
+most basic form of induction involves equipping each datatype in the theory with
+a higher-order function, which is called induction principle. This function allows to
+define a term dependent on an element of the datatype through the use of special
+term formers — constructors. For instance, consider the non-dependent induction
+corresponding to natural numbers: ind : ∀A. A → (N → A → A) → N → A. It
+enables the construction of a term of type A based on an arbitrary natural number,
+given the values of A at zero and the successor – the standard constructors of natural
+numbers in Peano arithmetic.
+The issue here is that the use of induction functions is quite restrictive and inconvenient. In this context, most dependently typed languages employ an approach
+borrowed from functional programming, known as pattern matching. The essence
+of this approach lies in the direct definition of a function’s behavior on different
+1
+
+1. Introduction
+constructors of the provided parameters, with recursion used to emulate induction
+hypotheses. The advantage of this method is that a function can depend on several arguments simultaneously, which is diﬀicult to achieve with primitive recursion
+principle. However, a drawback arises in that recursion is represented simply as a
+plain function application, leaving it to an external checking process to determine if
+the call is safe (i.e., a function that uses particular recursive calls terminates).
+Unrestricted recursion can quickly render the logic of a dependently typed language
+trivial. Consider a term f : A := f . This term passes the type-checking, as it
+simply calls itself, but it is non-terminating (i.e., it can be unfolded infinite number
+of times). Further, by definition it can represent any type, including the empty
+one. In particular it means that every type in the theory is inhabited, which is the
+definition of triviality of a type theory.
+In popular dependently typed languages (such as Agda, Coq, Lean and Idris) there
+is a special component, which is called termination checker. The aim of this project
+is to investigate the use of type information for the purpose of termination checking.
+
+1.1
+
+Existing Approaches
+
+Commonly, termination checkers are based on a simple principle: each recursive call
+must involve a structurally smaller argument compared to the original parameter
+of a function. The expected way to obtain structurally-smaller terms is the use
+of pattern-matching. Indeed, pattern-matching on natural numbers brings smaller
+numbers in the scope, and making recursive calls with these numbers should be safe.
+Any termination checker is inherently incomplete since it aims to solve an undecidable problem. This implies that there is always room for improvement, although
+it may come at the cost of performance. For example, one particularly powerful
+method – Size-Change Principle by Jones et al. [2001] – has a high computational
+complexity.
+The concept of type-based termination is not novel. The approach we shall employ
+here, known as sized types, involves annotating types with their respective ”sizes”.
+The theoretical framework around sized types is considerably more intricate than
+that of structural recursion [Barthe et al., 2006], suggesting the potential for discovering a theory better suited for termination checking. Additionally, a common
+finding in works within this field is the necessity insertion of explicit size annotation
+for some terms by the user.
+Furthermore, there was an attempt to implement type-based termination in Rocq
+[Chan et al., 2023]. As a result, they conclude that their approach to type-based
+termination checking based on sized types is not feasible due to performance considerations.
+2
+
+1. Introduction
+
+1.2
+
+Contribution
+
+In this work, we introduce an approach to type-based termination that integrates
+sized types [Abel and Pientka, 2016], higher-order polymorphic lambda-calculus
+[Barendregt, 1991], and the size-change termination principle [Jones et al., 2001].
+We present a formal system that accommodates definitions by both pattern- and
+copattern-matching, uses size annotations, and has the property of strong normalization — i.e., the absence of infinite reduction sequences. Additionally, we present an
+algorithm for inferring size annotations for this system, enabling the development of
+an implicit type-based termination checker (i.e., an algorithm of termination checking that does not require input from a user). As a practical outcome, we implement
+the proposed termination checker for dependently typed language Agda.
+The theoretical solution we propose has novelty in the sense that it combines sized
+types and size-change termination. Furthermore, our work contributes by developing
+an algorithm for inferring size annotations for the well-founded flavor of sized types,
+a task that has not been previously attempted. Finally, our implementation for
+Agda demonstrates the possibility of practical usage of sized typing, challenging
+previous claims that such usage was infeasible [Chan et al., 2023].
+
+1.3
+
+Structure
+
+This work is structured as follows:
+• In chapter 2 we give a general overview of the parts of type theory that are
+relevant to this thesis. The reader interested in semantical part of this thesis
+is welcome to read section 2.2 to get prepared for the language of formal
+systems we use later. The reader interested in practical parts is welcome
+to review section 2.4 and section 2.5 where we briefly describe Agda – the
+target language of practical implementation of this work, – and the existing
+approaches to termination checking in this language.
+• In chapter 3, we describe the intuition behind the proposed approaches. If the
+reader has to choose only one chapter to look at, we highly advise choosing
+chapter 3. The reason is that there we try to convince the audience of our
+ideas without diving into technical details.
+• In chapter 4, we describe the syntax of System Fωcop, SCT , the sized higherorder polymorphic lambda-calculus which serves as the target system of our
+proposed termination checker. Additionally, we provide a technical overview of
+the size-change termination principle [Jones et al., 2001] in section 4.4, which
+serves as a powerful tool in our inference algorithms.
+• In chapter 5, we provide a proof of strong normalization for System Fωcop, SCT .
+This chapter contains the main theoretical novelty of this work, namely, the
+application of the size-change principle to sized typing.
+• In chapter 6, we describe the termination checking for System Fω and prove
+3
+
+1. Introduction
+its soundness. This chapter contains a theoretical description of the algorithm
+for termination checking, and therefore can serve as a reference for practical
+implementation.
+• In chapter 7 we provide the architectural details and overview the challenges we
+met during the implementation process of the proposed termination checker.
+• In chapter 8 we compare our results with the existing works, highlighting the
+advantages and disadvantages of our solution.
+• In chapter 9, we offer a more precise overview of the work presented in this
+thesis and discuss its impact on the future of type theory.
+
+4
+
+2
+Background
+This section aims to briefly introduce the reader to the main objects studied in this
+work, namely, lambda-calculus, higher-order polymorphic lambda-calculus, dependentlytyped systems, Agda, and the existing methods for proving termination in Agda: the
+current termination checker and sized types.
+
+2.1
+
+Lambda Calculus
+
+Lambda calculus serves as a formalism for describing computations as a mathematical object. It is inherently simple, characterized by a grammar of terms comprised
+of three constructs, with the first two termed abstraction and application.
+t ::= λx. t | t t | x
+Additionally, lambda calculus contains a single rewrite rule known as β-reduction,
+where t[x := t0 ] represents the process of substituting the term t0 for x within t:
+(λx. t1 ) t2 ⇒ t1 [x := t2 ]
+This formalism is highly expressive, with a theorem suggesting that any intuitively
+computable function can be expressed using lambda calculus [Kleene, 1943].
+The power of lambda calculus also enables the expression of non-terminating computations. For instance, the term (λx. x x) (λx. x x) can undergo infinite reduction.
+However, for certain applications, the presence of infinite reduction sequences is undesirable. The property of absence of infinite reduction sequences in the calculus is
+referred to as strong normalization, and a calculus possessing this property is termed
+strongly normalizing.
+One of the popular approaches to rule out infinitely reducible constructs is to annotate terms with types. The most basic extension of lambda calculus with types is
+called simply typed lambda calculus, where types are formed from A ::= B | A → A,
+where B is a set of some base types. The grammar for terms remains the same, but
+typically, attention is restricted to a certain set of well-typed terms. Well-typedness
+is usually expressed as a ternary relation Γ ` t : A , indicating that a term t has
+5
+
+2. Background
+type A within context (list of variables and their types) Γ. This relation is built
+using the following rules:
+Γ`r:A→B
+Γ`s:A
+Γ`rs:B
+
+Γ, x : A ` t : B
+
+(x : A) ∈ Γ
+
+Γ ` λx : A. t : A → B
+
+Γ`x:A
+
+There are known results that simply-typed lambda calculus is strongly normalizing
+[Girard, 1975].
+
+2.2
+
+System Fω
+
+Simply-typed lambda calculus is indeed not very expressive. One motivation for
+lambda calculus is to serve as a semantical counterpart of programming languages,
+which are typically more complex and feature operations beyond abstraction and
+application. One notable extension is polymorphism—the ability to define a function
+that can be instantiated with multiple types. Polymorphic lambda calculus is known
+as System F [Reynolds, 1974] [Girard, 1972].
+Here we define the higher-order polymorphic lambda calculus, denoted as System
+Fω [Barendregt, 1991]. Its main distinction from System F is the presence of type
+operators. An interesting property of System Fω is that on the type-level, it resembles simply-typed lambda calculus with a single kind ∗, which can be though of as
+the ”type of types”. On the term level, there exists a type lambda Λ, which allows
+for explicit abstraction over types within terms.
+Kinds ι in System Fω are generated by the following grammar:
+ι ::= ∗ | ι → ι
+Types in System Fω are generated by the following grammar:
+A ::= X | A → A | ∀X : ι. A | λX : ι. A | A A
+Now we present the rules of well-formedness for types, denoted as ∆ `F A : ι . Here,
+∆ is a kinding context, A is a type, and ι is a kind. The relation =β represents betaconvertibility, which holds if one term is β-reducible to another.
+(X : ι) ∈ ∆
+∆ `F X : ι
+
+∆ `F A : ι1 → ι2
+∆ `F B : ι1
+∆ `F A B : ι2
+∆, X : ι `F A : ∗
+∆ `F ∀X : ι. A : ∗
+
+∆, X : ι1 `F A : ι2
+∆ `F λX : ι1 . A : ι1 → ι2
+
+∆ `F A : ∗ ∆ `F B : ∗
+∆ `F A → B : ∗
+
+Now we can present the rules of well-typedness of terms in System Fω .
+∆; Γ `F r : A → B
+
+∆; Γ `F s : A
+
+∆; Γ `F r s : B
+6
+
+∆; Γ `F r : ∀A : ι. B
+
+∆ `F G : ι
+
+∆; Γ `F r G : B[A := G]
+
+2. Background
+∆; Γ `F t : A
+
+A =β A0
+
+∆; Γ `F t : A0
+∆; Γ, x : A `F r : B
+
+x:A∈Γ
+∆; Γ `F x : A
+
+∆, A : ι; Γ `F r : B
+
+∆`A:∗
+
+∆; Γ `F λx : A. r : A → B
+
+∆; Γ `F ΛA. r : ∀A : ι. B
+
+One notable feature of System Fω is its extensibility to fixpoint operators µ, ν :
+(∗ → ∗) → ∗ (representing the least and greatest fixpoints, respectively). Their
+core property is an equality µF = F (µF ) (also νF = F (νF )), which reflects the
+behavior of fixpoints. These type operators are used to introduce inductive and
+coinductive types. For instance, the type of natural numbers N can be expressed as
+µ(λX. 1 + X), where + : ∗ → ∗ → ∗ denotes a sum type operator.
+
+2.3
+
+Dependent Types
+
+One particularly powerful extension of lambda calculus is dependent typing. Essentially, dependently typed languages permit the usage of terms within types, thereby
+blurring the distinction between these two realms. We present the definition of a
+dependently typed system by Barendregt [1991]. The grammar of terms and types
+is unified:
+
+A, B, C ::= x | λx : A. B | A B | Πx : A. B | U
+Here, Π serves as a generalization of → from System Fω , and U is a generalization
+of a kind, referred to as universe. In this exposition, we consider the set of universes
+to be ∗, □. With this foundation, we can now present the rules of well-typedness
+Γ `D t : A for a dependent type system:
+
+Γ `D A : U 1
+
+Γ `D A : B
+Γ `D C : U
+Γ, x : C `D A : B
+
+Γ `D A : U
+x:A∈Γ
+Γ `D x : A
+
+Γ `D ∗ : □
+
+Γ, x : A `D B : U2
+
+(U1 , U2 ) ∈ {(∗, □), (□, □), (□, ∗), (∗, ∗)}
+
+Γ `D Πx : A. B : U2
+Γ, x : A `D t : C
+
+Γ `D Πx : A. C : U
+
+Γ `D f : Πx : A. B
+
+Γ `D f a : B[x := a]
+
+Γ `D λx : A. t : Πx : A. C
+Γ `D t : A
+
+Γ `D a : A
+
+Γ `D A0 : U
+
+A =β A0
+
+Γ `D t : A 0
+Dependent types offer significant expressive power, rendering them suitable for
+describing and proving mathematical theorems. Internally, dependent types are
+grounded in intuitionistic type theory, enabling the definition of a decidable typechecking algorithm for them. This, in turn, makes them well-suited as a type system
+for programming languages, with Agda being one prominent example.
+7
+
+2. Background
+
+2.4
+
+Agda
+
+Agda [Norell, 2007] is a programming language featuring dependent types. Its syntax
+draws inspiration from Haskell [Marlow et al., 2010], thus having its roots in lambda
+calculus.
+Agda naturally incorporates System Fω as part of its type system, enabling the
+expression of the following definition (where Set is analogous to ∗):
+f : (F : Set → Set) → (A : Set) → (G : Set → A) → A
+f F A G = G (F A)
+In Agda, it is possible to define inductive data types by specifying their constructors. These data types can also be parameterized by types and values, enabling the
+creation of polymorphic definitions. Here, we present examples of natural numbers
+µ(λX. 1 + X) and lists λA : ∗. µ(λX : ∗. 1 + (A × X)) in Agda:
+data Nat : Set where
+zero : Nat
+suc : Nat → Nat
+data List (A : Set) : Set where
+nil : List A
+cons : A → List A → List A
+In Agda, defining functions involves pattern matching: the user specifies a set of
+clauses, akin to rewrite rules. When a function is invoked with arguments matching
+the left-hand side of any clause, the function can be substituted with the right-hand
+side of that clause, with bound variables in the pattern substituted for corresponding
+parts of the arguments. The utilization of induction principles for data types is
+achieved through recursive calls.
+add : Nat → Nat → Nat
+add zero y = y
+add (suc x) y = suc (add x y)
+
+In contrast to induction principles, which focus on well-founded data, Agda also
+supports coinductive data types, which may represent an infinitely deep structures.
+For instance, the type of streams λA : ∗. ν (λX : ∗. A × X) in Agda can be
+represented as a coinductive record:
+record Stream (A : Set) : Set where
+coinductive
+field
+head : A
+8
+
+2. Background
+tail : Stream A
+open Stream
+The preferred method for working with coinductive data involves the use of coinductive functions, which are defined using copattern matching. This approach is dual
+to pattern matching in that it decomposes the output rather than the input. The
+concept is that a function returning a coinductive type defines its behavior on the
+fields of that type. The function then reduces only when a projection is applied to
+it, which is necessary to avoid infinite unfolding. Here, we present an infinite stream
+of zeros.
+zeros : Stream Nat
+zeros .head = zero
+zeros .tail = zeros
+The key observation here is that zeros does not unfold by itself. This approach allows
+for the retention of strong normalization in the presence of infinite data structures
+such as coinductive records.
+
+2.5
+
+Termination Checker
+
+In section 2.4, we presented a definition of a function add using pattern matching,
+where recursive calls to this function occur in the right-hand side of clauses. This
+definition is accepted by Agda because the termination checker can verify its safety.
+The logic here is evident: the calls to add are made on structurally smaller data, so
+if we provide a finitely constructed argument (and natural numbers are finite), the
+function will eventually terminate.
+However, the capabilities of the termination checker in Agda extend beyond the simple requirement that an argument to a function should be strictly smaller. Consider
+the following definition of the Ackermann function:
+ack : Nat → Nat → Nat
+ack zero n
+= suc n
+ack (suc m) zero = ack m (suc zero)
+ack (suc m) (suc n) = ack m (ack (suc m) n)
+Here, we observe that the inner call to ack occurs on an argument that is not structurally smaller than the first argument. However, this definition is still accepted by
+Agda. The reason for this is that in this call, the first argument remains the same as
+the parameter of the enclosing function, while the second argument is smaller. Agda
+recognizes that with each call, either the first argument decreases or remains the
+same, while the second argument decreases. By applying lexicographical induction,
+Agda concludes that the function terminates.
+9
+
+2. Background
+The termination checker in Agda is grounded in the Size-Change Principle [Jones
+et al., 2001], which is a potent method for determining whether a set of mutuallyrecursive functions terminates based on the relation between arguments and parameters. If a set of these relations satisfies certain computable criteria, then the
+function is deemed terminating by Agda. This criterion encompasses any form of
+lexicographical induction.
+While the Size-Change Principle applied in Agda is a direct interpretation of the classical algorithm [Jones et al., 2001], it’s worth noting that there exists a generalized
+framework for the application of this method in dependent type theory [Wahlstedt,
+2007].
+Coinductive functions also need to satisfy a certain variant of a termination criterion.
+Here, it is referred to as guardedness [Coquand, 1994]. The concept is that recursive
+usages of coinductive functions should be enclosed within a coinductive constructor. This condition is automatically ensured for definitions by copattern matching.
+However, an additional requirement is that the coinductive function should not be
+wrapped in anything else. For example, the following definition does not pass the
+guardedness check. Here, wrong-zeros .tail is actually a syntactic sugar for the
+function tail applied to wrong-zeros:
+
+wrong-zeros : Stream Nat
+wrong-zeros .head = zero
+wrong-zeros .tail = wrong-zeros .tail
+It is apparent that wrong-zeros.tail can be infinitely unfolded. Therefore, to ensure
+strong normalization, Agda prohibits such functions.
+
+2.6
+
+Sized Types
+
+The concept of using types to ensure termination is not novel. One approach to
+type-based termination checking in functional languages is sized types. This idea
+originated for Haskell-like languages [Hughes et al., 1996] and initially utilized domain theory [Scott, 1976] to establish soundness.
+The further theoretical evolution of sized types unfolds as follows:
+• Barthe [Barthe et al., 2005] pioneered sized typing for System F and devised
+an inference algorithm for it. Subsequently, this work was generalized to the
+Calculus of Constructions [Barthe et al., 2006]. Ultimately, this effort culminated in an implementation of an implicit termination checker based on sized
+types for Rocq [Chan and Bowman, 2019], although this attempt was later
+revealed to be unsuccessful [Chan et al., 2023].
+• In parallel, Abel [2006] explored the application of sized types for System
+F with equirecursive data types. One notable result of this theoretical development [Abel and Pientka, 2016] demonstrates that the requirements on
+10
+
+2. Background
+semicontinuity for function signatures can be lifted while still preserving the
+proof of strong normalization.
+A practical implementation of sized types was carried out in Agda. There, sized
+types allow to prove termination of non-trivial recursive functions. For instance,
+consider the division of x by y + 1. Typically, this function cannot be verified by
+the syntactic termination checker, as it employs a non-structural recursion principle.
+However, with the aid of sized types, termination can be established as follows:
+{-# OPTIONS --sized-types #-}
+open import Agda.Builtin.Size
+data Nat : Size → Set where
+zero : {i : Size} → Nat i
+suc : {i : Size} → Nat i → Nat (↑ i)
+minus : {i : Size} → Nat i → Nat ∞ → Nat i
+minus zero x = zero
+minus (suc x) zero = (suc x)
+minus (suc x) (suc y) = minus x y
+div : {i : Size} → Nat i → Nat ∞ → Nat i
+div zero x = zero
+div (suc x) y = suc (div (minus x y) y)
+
+One notable characteristic here is that sized types are infective: if certain code
+employs sized types, then any code that interacts with it must also acknowledge
+sized types. This precludes the compartmentalization of type-based termination
+techniques, particularly when sized types do not seamlessly integrate with other
+features of Agda.
+
+11
+
+2. Background
+
+12
+
+3
+Main Idea
+In this chapter, we discuss the conceptual underpinnings of our proposal for the typebased termination checker and delineate an approach to its implementation. The
+discussion presented here represents a further elaboration of the ideas outlined in
+the previous works [Abel and Pientka, 2016], which forms the technical foundation
+of this project.
+The term type-based termination inherently suggests that termination information
+should be conveyed at the type level. This stands in contrast to a traditional termination checker, which infers termination information based on terms. Consider
+a function f : N → N → N, which may be recursive. We can annotate each input
+with a size, yielding f : (i : Size) → (j : Size) → Ni → Nj → N. The process of
+annotation is straightforward: since we can pattern-match on parameters to obtain
+something structurally smaller than the parameters themselves, we should annotate
+all parameters with associated size information. Moreover, since a function can be
+invoked with arbitrary arguments, the size information labels are independent.
+
+3.1
+
+Induction
+
+Let’s illustrate this concept with an example involving a finitely-branching tree:
+data RoseTree’ (A : Set) : Set where
+rose : A → List (RoseTree’ A) → RoseTree’ A
+One intuitive principle regarding inductive data types is that they are of finite
+depth; thus, subterms of a larger element of an inductive data type can be regarded
+as smaller than the element itself. This observation suggests that we can apply the
+following size annotations to this definition:
+data RoseTree (i : Size) (A : Set) : Set where
+rose : {j : Size< i} → A → List (RoseTree j A) → RoseTree i A
+This implies that any occurrence of a sub-rose-tree within a larger rose-tree will be
+smaller than the entire rose-tree. Furthermore, it underscores the notion that the
+utilization of a constructor yields a larger data type.
+13
+
+3. Main Idea
+Before proceeding, we define a function map that applies a given function to every
+element of a list. An important observation is that this function is polymorphic,
+meaning that the structure of the output only depends on the structure of the input
+list, not on its elements. This property, known as parametricity [Wadler, 1989], holds
+in Agda.
+map : {A B : Set} → (A → B) → List A → List B
+map f nil = nil
+map f (cons x xs) = cons (f x) (map f xs)
+This function terminates because it calls itself on a structurally smaller argument,
+thereby obsoleting the need for size annotations.
+Now we are ready to define a function mapRose, which applies a provided function
+to every element of the list. This function, in contrast to map, is not structurally
+recursive, and we need our size annotation to show its termination.
+mapRose : {i : Size} → {A B : Set} → (A → B) → RoseTree i A → RoseTree ∞ B
+mapRose f (rose {j} x rest) = rose {∞} (f x) (map (mapRose {j} f ) rest)
+The key insight here is that mapRose is invoked with a smaller size j, which is lesser
+than i. This decrease in one of the function’s arguments serves as evidence of the
+function’s termination.
+The challenge now lies in achieving this without explicit insertion of sizes. Let k
+and l be size variables. We focus on the function map, which is polymorphic. Its
+first parameter is a function A → B, which in our case is RoseTree {k} A →
+RoseTree {l} B. Additionally, we observe that the second parameter of map is
+List (RoseTree {k} A), which is analogous to the first argument of a function. Now,
+considering that the second argument is List (RoseTree {j} A), we can infer that
+k = j, indicating that mapRose f is invoked on structurally smaller rose-trees.
+It is crucial that the function is defined by pattern-matching. With type-based
+termination enabled, Agda can monitor the ”sizes” of pattern-matched data in the
+left-hand side of clauses, thereby treating polymorphic functions as size-invariant.
+Our algorithm of type-based termination treats all type variables as carrying the
+same size. For instance, the following function g, while strongly normalizing, would
+fail the termination check.
+app : {A B : Set} → (A → A) → (A → B) → A → B
+app i f x = f (i x)
+g : Nat → Nat
+g zero = zero
+g (suc zero) = zero
+g (suc (suc n)) = app suc g n
+The issue arises because suc is expected to be size-preserving, while it is not. In
+the definition of app, we could apply i an arbitrary number of times, leading to g
+becoming non-terminating.
+14
+
+3. Main Idea
+Our analysis extends to a set of mutually-recursive functions:
+h : Nat → Nat
+i : Nat → Nat
+h zero = zero
+h (suc n) = app (λ x → x) i n
+i zero = zero
+i (suc n) = app (λ x → x) h n
+The essence of our inference lies in treating sizes as additional parameters of mutually
+recursive functions. We then apply the size-change principle [Jones et al., 2001] to
+determine whether a set of calls is safe. This allows us to generate a termination
+certificate inferred from these synthetic size parameters.
+
+3.1.1
+
+Size preservation
+
+Sometimes, polymorphic functions alone are insuﬀicient to address the problem. For
+instance, the division function mentioned earlier necessitates sized types to prove its
+termination to Agda.
+minus : Nat → Nat → Nat
+minus zero x = zero
+minus (suc x) zero = (suc x)
+minus (suc x) (suc y) = minus x y
+div : Nat → Nat → Nat
+div zero x = zero
+div (suc x) y = suc (div (minus x y) y)
+We observe that minus is not polymorphic, indicating that it cannot be covered by
+the process described above.
+To handle such functions, the type-based termination checker is extended with a
+”size preservation analysis”, a process that involves understanding the dependencies
+in data types within function signatures. Examining the function minus, we notice
+that its result is never larger than the first argument. Given that we understand how
+all clauses behave regarding size information, this dependency between the result
+and the first argument becomes inferable. Consequently, we learn that minus x y
+is not larger than x, which, in turn, demonstrates that div is called on a smaller
+argument than (suc x). Thus, we can conclude that div is terminating.
+It is crucial to grasp the process of selecting data types for size preservation. The
+intuition here lies in distinguishing between users’ input and output. For instance,
+the function can be decomposed into input and output by separating its domain
+and codomain. However, our separation goes a bit further: we categorize the data
+types in the signature into positive and negative positions. For example, consider
+the following signature:
+15
+
+3. Main Idea
+record _×_ (A B : Set) : Set where
+field
+fst : A
+snd : B
+r : (Nat1 → Nat2 ) → Nat3 → Nat4 × Nat5
+Here, N at2 and N at3 occur negatively, and they are under the control of the user.
+Hence, the type-based termination checker assigns different and independent sizes
+to them.
+On the contrary, N at1 , N at4 , and N at5 occur positively, and the signature can be
+size-preserving precisely in these arguments. For example, N at1 is not under the
+control of the user – the arguments to it are supplied within r, and the argument
+may always be that for N at3 . In this case, N at1 would have the same size as N at3 .
+
+3.2
+
+Coinduction
+
+The idea above also useful for checking the productivity of coinductive function.
+We shall recapitulate the definition of infinite streams in Agda:
+record Stream (A : Set) : Set where
+coinductive
+field
+head : A
+tail : Stream A
+open Stream
+First, we need to explain a shift in intuition for sized types when applied to coinductive definitions. Normally, sized types represent a ”height” of a term. This is
+a valid intuition for inductive data types, since they are finite and can be assigned
+an ordinal representing the level of nestedness. For example, a term for the natural
+number 3, which is represented in Agda as (suc (suc zero)), can be assigned a size
+of 3. However, this intuition does not work well when infinite data structures are
+involved. How can the size of an infinite stream be anything other than ∞?
+Following previous works [Abel and Pientka, 2016], we propose to think about the
+size of streams as their ”depth”, meaning a stream of size 3 represents a stream from
+which we are allowed to take three elements. In this sense, streams are contravariant
+in their size; that is, we can take 3 elements from an infinitely deep stream but cannot
+do so for a stream with depth 2. Note that the variance here is opposite to that of
+inductive data types.
+With this in mind, we can provide a definition of sized streams:
+record Stream’ (i : Size) (A : Set) : Set where
+coinductive
+16
+
+3. Main Idea
+field
+head : A
+tail : {j : Size< i} → Stream’ j A
+open Stream’
+The rationale behind this is that the operation tail enables us to obtain a stream of
+smaller depth from a stream of greater depth. Similar to inductive data types, the
+process of annotation here is straightforward.
+Now, let us provide an example of a simple coinductive function, namely, an infinite
+stream of zeros with inserted sizes:
+zeros’ : {i : Size} → Stream’ i Nat
+zeros’ .head = zero
+zeros’ .tail {j} = zeros’ {j}
+In contrast to functions over inductive types, where we assign size annotations to
+parameters, here we annotate the returned type, because that is what we define by
+copattern matching.
+Now, the process of copattern matching with tail results in a new size variable in
+the scope, namely j. The expected type of the right-hand side of the clause in this
+case is Stream j N, so we need to provide a deeper stream than Stream j N. In
+other words, we need such Stream k N where k ≥ j. However, we do not want an
+arbitrarily big stream, since we need a proof that we are defining a deep stream in
+terms of shallower streams. This leads us to a conclusion that a suitable assignment
+would be k := j.
+As another example, this function would not pass the termination check:
+wrong-zeros’ : {i : Size} → Stream’ i Nat
+wrong-zeros’ .head = zero
+wrong-zeros’ .tail {j} = wrong-zeros’ .tail
+The reason is that the invocation of .tail on the right-hand side requires some size
+variable k1 , and the recursive invocation of wrong-zeros’ also requires a size k2 where
+k2 > k1 . If k1 is assigned to j (the smallest size in the scope), then k2 can be assigned
+to i at best, and as a result, there is no proof that wrong-zeros’ is defined in terms
+of shallower streams.
+
+3.2.1
+
+Size preservation
+
+The significance of size preservation in coinductive functions is similar to that in
+inductive ones. As demonstrated earlier, we attributed an independent size variable to the return type of zeros. This choice is not arbitrary; it stems from the
+contravariance of coinductive types.
+17
+
+3. Main Idea
+In practice, we annotate all positive occurrences of coinductive types with separate
+size variables, while negative occurrences can retain size preservation. This strategy
+accounts for the fact that users have control over the output of coinductive functions.
+Since the input is inherently infinite and externally supplied, careful analysis ensures
+that the function does not consume more than it produces, a crucial aspect for
+guaranteeing productivity.
+With the aid of coinductive size preservation, Agda accepts functions such as the
+following:
+zipWith : {A B C : Set} → (A → B → C) → Stream A → Stream B → Stream C
+zipWith f s1 s2 .head = f (s1 .head) (s2 .head)
+zipWith f s1 s2 .tail = zipWith f (s1 .tail) (s2 .tail)
+fib : Stream Nat
+fib .head = zero
+fib .tail .head = suc zero
+fib .tail .tail = zipWith add fib (fib .tail)
+The reason why fib passes the termination check is that zipWith preserves size in
+both its stream parameters. Agda understands that zipWith does not consume more
+than it produces, and annotates both arguments with the same size as the output.
+Later, in the context of fib, this information helps Agda recognize that zipWith does
+not call .tail on the provided fib arguments in a way that would violate termination,
+allowing fib to be considered terminating overall.
+
+18
+
+4
+Syntax
+In this chapter, we provide a syntactic overview of System Fωcop, SCT , an extension
+of System Fωcop [Abel and Pientka, 2016] incorporating the size-change termination
+principle [Jones et al., 2001]. It is worth noting that the system bears similarities to
+Agda, supporting the definition of datatypes, mutual recursion, pattern matching,
+and copattern matching.
+We will only outline the rationale behind specific syntactic constructs. For a more
+comprehensive understanding of the design decisions for System Fωcop , we direct the
+reader to a previous work [Abel and Pientka, 2016].
+The distinctions between System Fωcop, SCT and System Fωcop will be emphasized in
+light gray.
+The primary distinction lies in the absence of measures in System Fωcop, SCT , unlike
+in System Fωcop where they are used to facilitate lexicographic induction on tuples
+of ordinals in the semantic interpretation. Instead, our system relies on an external
+requirement, which is considered more robust. Additionally, we expand the structure
+on size expressions to a bounded meet-semilattice, a necessity for the inference
+algorithm discussed later. Further rationale for introducing the semilattice structure
+is elaborated in section 6.3.
+
+4.1
+
+Kinds and Sizes
+
+We begin our overview of the syntax of System Fωcop, SCT with the system of kinds.
+The grammar for kinds is represented as follows:
+κ ::= ∗ | <a | πκ → κ
+Note the non-standard kind <a, which is not present in traditional System Fω .
+This special kind allows us to emulate judgments about sizes without the use of
+dependent types. We should also remark the usage of polarity π, which refers to
+covariant (π = +), contravariant (π = −), constant (π = >), and mixed (π = ◦)
+variances.
+The grammatical structure for kinds in our syntax is presented in Table 1.
+19
+
+4. Syntax
+SizeVar
+SizeMin
+SizeExp
+Pol
+SizeCtx
+SKind
+SCtx
+Kind
+TyCtx
+
+3 i, j
+3 a∧ , b ∧
+3 a, b
+3π
+3Ψ
+3 ι, ι0
+3 |∆|
+3 κ, κ0
+3∆
+
+Size variable
+::= (i + n) | a ∧ (j + n) Minimum of size variables
+::= ∞ + n | a∧
+Size expression (n ≥ 0)
+::= ◦ | + | − | >
+Polarity/variance
+::= · | Ψ, i : π(< a)
+Size variable context
+::= ∗ | o | ι → ι0
+Simple kind
+::= · | |∆|, X : ι
+Simple kinding context
+::= ∗ | <a | πκ → κ0
+Kind with variance
+::= · | ∆, X : πκ
+Type variable context
+∧
+
+Table 1: Grammar description for kinds and sizes
+
+4.1.1
+
+Polarities
+
+Our motivation for introducing polarities is explained by the fact that our types are
+parameterized by ordinal-like objects (the sizes), hence we need to introduce subtyping. To interpret the ordering on type operators, we need to know whether they
+are monotone, antitone, or constant in their arguments, so they are obliged to have
+polarity annotations. A thorough discussion of higher-order polarized subtyping can
+be found in [Abel, 2006].
+Polarities form a lattice, where ◦ < + < > and ◦ < − < >. The polarities can be
+composed and inverted, which is useful during the kind-checking procedure.
+Formally, π < π 0 represents the rule for the lattice of polarities. We can think of ◦
+as representing zero information, and > as representing an ”unused” polarity.
+π≤π
+
+◦≤π
+
+π≤>
+
+ππ 0 represents the rule for the composition (commutative) of polarities.
+>π = >
+
+◦π = ◦ (π 6= >)
+
++π = π
+
+−− = +
+
+π −1 π represents the rule for inverse composition of polarities.
+>−1 π = ◦
+
+◦−1 ◦ = ◦
+
+◦−1 π = > (π 6= ◦)
+
++−1 π = π
+
+−−1 π = −π
+
+π∆ and π −1 ∆ extend the rules of composition to the typing context.
+π· = ·
+π −1 · = ·
+
+4.1.2
+
+π(∆, X : π 0 κ) = (π∆), X : (ππ 0 )κ
+π −1 (∆, X : π 0 κ) = (π −1 ∆), X : (π −1 π 0 )κ
+
+Sizes
+
+Our system features a bounded meet-semilattice of sizes, which are located on the
+kind level. Intuitively, the sizes can be thought of as ordinals, but there is no requirement on the ordinal structure of them besides having an order, infinity, and a
+minimum. In contrast to System Fωcop , we are extending the grammar of size expressions with the meet operation (∧), which will be useful in the inference algorithm
+20
+
+4. Syntax
+later. One important observation about ∧ is that we allow only minima of (possibly incremented) size variables. Having ∞ as a permitted element of a ∧-sequence
+would complicate the rules.
+Now we shall explain the basic judgments about sizes.
+First, we need to extend the domain of size increment a + m:
+(∞ + n) + m = ∞ + (n + m)
+
+(i + n) + m = i + (n + m)
+
+(a∧ ∧ (i + n)) + m = (a∧ + m) ∧ (i + (n + m))
+The judgment Ψ ` i < a concerns the well-formedness of a bounded size variable.
+It signifies that the size is accurately represented in the size context, as depicted in
+the following rule. The polarity restriction indicates that we can only refer to sizes
+that are currently covariant.
+(i : π(< a)) ∈ Ψ
+Ψ`i<a
+
+π≤+
+
+The judgment Ψ ` a concerns the well-formedness of a size expression in a size
+context.
+Ψ`i<a
+Ψ`i+n
+
+Ψ`∞+n
+
+Ψ ` a∧
+Ψ`i<b
+∧
+Ψ ` a ∧ (i + n)
+
+The judgment ` Ψ concerns the well-formedness of the entire size context. The
+polarity inversion indicates that contravariant sizes can be correctly included in the
+size context, but they cannot be used until the polarity becomes + or ◦.
+`Ψ
+◦−1 Ψ ` a
+Ψ ` i : π(< a)
+
+`·
+
+The judgment Ψ ` ⃗a ⇔ Ψ0 describes the well-formedness of a size substitution. The
+intuition behind this rule is that it involves constructing a sequence of sizes from
+the context Ψ that satisfies a ”blueprint” specified by the context Ψ0 .
+Ψ`·⇔·
+
+Ψ ` ⃗a ⇔ Ψ0
+
+Ψ ` a < b[⃗a/Ψ̂0 ]
+
+Ψ ` ⃗a a ⇔ Ψ0 , i : π(< b)
+
+The judgment Ψ ` a < b describes strict size comparison. These rules establish a
+strict order relation on size expressions. Additionally, our system includes rules for
+defining the minima of size variables:
+n<m
+Ψ`∞+n<∞+m
+
+n<m
+Ψ`i<a
+Ψ`i+n<i+m
+
+Ψ`i<∞+m
+Ψ ` i + n < ∞ + (m + n)
+
+Ψ`i<a
+Ψ`i+n<∞+m
+
+Ψ`a+n≤b
+Ψ, i : π(< a), Ψ0 ` i + n < b
+
+π≤+
+
+Ψ ` (i + n) < a for some (i + n) ∈ a∧
+
+Ψ ` a < (i + n) for all (i + n) ∈ a∧
+
+Ψ ` a∧ < a
+
+Ψ ` a < a∧
+21
+
+4. Syntax
+Ψ ` a∧ < b ∧
+
+Ψ ` (i + n) < b∧
+
+Ψ ` a∧ ∧ (i + n) < b∧
+Ψ ` a ≤ b is a judgment about non-strict size comparison:
+Ψ`a<b+1
+Ψ`a≤b
+The judgment Ψ ` ∃Ψ0 indicates that Ψ0 consistently extends Ψ. This judgment’s
+significance is discussed in section 3.6 of [Abel and Pientka, 2016]. Essentially, it
+asserts that for all size valuations η of Ψ, there exists a valuation for η(Ψ0 ). This
+condition may not always hold; for instance, if Ψ ≡ i ≤ ∞, a valid valuation could
+be η(i) := 0, but Ψ0 ≡ i ≤ ∞, j ≤ i would lack a consistent valuation.
+We also define a↑ , referred to as bound normalization, by the following rules. Bound
+normalization implies that when working with an infinite size, arbitrary increments
+of it lose significance.
+(∞ + n)↑ = ∞ + 1
+
+4.1.3
+
+(a∧ )↑ = a∧
+
+Kinding
+
+In this section, we present the rules relevant to the subkinding system and the
+well-formedness of kinds.
+The judgment Ψ ` κ indicates the well-formedness of a kind. It’s crucial to note
+that sizes can only be used in positive positions or in mixed positions.
+Ψ`∗
+
+Ψ`a
+Ψ `< a
+
+−Ψ ` κ
+Ψ ` κ0
+Ψ ` πκ → κ0
+
+The judgment Ψ ` κ ≤ κ0 describes subkinding. This is essential due to the presence of an order on sizes, and ultimately, the aim is to utilize the rule of subsumption.
+The reversal of polarity comparison in the third rule reflects that the arrow kind
+operator is contravariant in its arguments.
+Ψ`∗≤∗
+
+π0 ≤ π
+
+Ψ`a≤b
+Ψ ` (< a) ≤ (< b)
+
+−Ψ ` κ01 ≤ κ1
+
+Ψ ` κ2 ≤ κ02
+
+Ψ ` πκ1 → κ2 ≤ π 0 κ01 → κ02
+
+Here we present the rule of parameterized comparison for sizes and kinds:
+Ψ ` O ≤π O0 for O ::= a | κ . This rule is generalized over different grammatical
+entities, thus representing a slight abuse of notation.
+Ψ ` O ≤ O0
+
+Ψ ` O0 ≤ O
+
+Ψ ` O ≤◦ O 0
+
+Ψ ` O ≤ O0
+
+Ψ ` O0 ≤ O
+
+Ψ ` O ≤+ O0
+
+Ψ ` O 0 ≤− O
+
+Ψ ` O ≤> O0
+
+We also define the rule ∆ ` ∃∆0 , which extends the rule Ψ ` ∃Ψ0 to general kinding
+contexts.
+22
+
+4. Syntax
+
+4.2
+
+Types
+
+In this section, we present the available type constructors in our language, along
+with the rules of kind checking for them.
+The syntax of type-related entities in our system is presented in Table 2. Notably,
+we do not have syntactic categories for measured types and constrained types, which
+distinguishes our system from System Fωcop .
+TyVar
+TyAtom
+Type
+Var
+Ctx
+Cons
+Proj
+Datatype
+Record
+
+3 X, Y, Z, i, j
+3K
+3 F, F 0 , A, Sc , Rd
+3 x, y, z
+3Γ
+3c
+3d
+3S
+3R
+
+::= a | X | 1 | × | → | ∀κ | ∃κ
+::= K | λX : ι. F | F F 0 | µa S | ν a S
+::= · | Γ, x : A
+::= hc1 : Sc1 ; . . . ; cn : Scn i
+::= {d1 : Rd1 ; . . . ; dn : Rdn }
+
+Type and size variables
+Type operators
+Type-level expressions
+Term variable
+Term variable context
+Constructor of datatype
+Field of record
+Datatype definition
+Record definition
+
+Table 2: Grammar description for type constructors
+
+4.2.1
+
+Kind checking
+
+We start by introducing the rules with the judgment ∆ ` A ⇒ κ , which describes
+the rules for inferring a kind for a type. This inference relation is defined simultaneously with the checking relation, as it is traditional with bidirectionally checked
+systems.
+∆`1⇒∗
+
+∆ ` × ⇒ +∗ → +∗ → ∗
+(X : πκ) ∈ ∆
+
+∆`a
+∆ ` a ⇒ <(a + 1)
+
+∆`X⇒κ
+
+π≤+
+
+∆ ` → ⇒ −∗ → +∗ → ∗
+
+∆ ` F ⇒ πκ → κ0
+
+π −1 ∆ ` G ⇔ κ
+
+∆ ` F G ⇒ κ0
+
+−∆ ` κ
+∆ ` ∀κ ⇒ +(◦κ → ∗) → ∗
+
+∆`κ
+∆ ` ∃κ ⇒ +(◦κ → ∗) → ∗
+
+∆`a
+
+−∆ ` a
+
+∆ ` S ⇔ ◦∗ → ∗
+∆ ` µa S ⇒ ∗
+
+∆ ` R ⇔ ◦∗ → ∗
+
+∆ ` ν aR ⇒ ∗
+
+∆ ` F ⇔ κ is a judgment about checking the kind for a type. It’s important
+to highlight that we don’t allow explicit usage of sizes as parameters of the type
+operators; rather, they should be standalone.
+∆`F ⇒κ
+
+∆ ` κ ≤ κ0
+
+∆ ` F ⇔ κ0
+
+◦−1 ∆ ` ι
+
+∆, X : πκ ` F ⇔ κ0
+
+∆ ` λX : ι. F ⇔ πκ → κ0
+
+∆ ` Sc ⇔ κ for all c ∈ S
+
+∆ ` Rd ⇔ κ for all d ∈ R
+
+∆`S⇔κ
+
+∆`R⇔κ
+23
+
+4. Syntax
+∆ ` ∆0 is a relation for the well-formedness of a kinding context ∆0 relative to a
+kinding context ∆.
+◦−1 ∆ ` κ
+
+∆`·
+
+∆, X : πκ ` ∆0
+
+∆ ` X : πκ, ∆0
+
+Given a well-formed kinding context, we can also define the well-formedness of a
+typing context ∆ ` Γ :
+∆`·
+
+4.2.2
+
+∆`Γ
+∆`A:∗
+∆ ` Γ, x : A
+
+Subtyping
+
+Our system features a subtyping relation because we need to compare types with
+different sizes. We shall note that the fixpoint operator ν is contravariant in its size
+annotation, whereas µ is covariant.
+The structural recursive function F @ G represents a normalizing application, as we
+are only interested in normal forms of the types [Watkins et al., 2003].
+The rules for subtyping are also defined in a bidirectional checking and inference
+style, as they mirror the rules of well-formedness for types.
+∆ ` F ≤π F 0 ⇒ κ where π 6= > is the judgment for inferring the subtyping relation.
+∆ ` F ≤π F 0 ⇒ π1 κ1 → κ2
+
+∆`K⇒κ
+∆ ` K ≤π K ⇒ κ
+−∆ ` κ ≤−π κ0
+
+π1−1 ∆ ` G ≤π1 π G0 ⇔ κ1
+
+∆ ` F G ≤π F 0 G0 ⇒ κ2
+∆ ` κ ≤π κ0
+
+κ00 = max−π (κ, κ0 )
+
+κ00 = maxπ (κ, κ0 )
+
+∆ ` ∃κ ≤π ∃κ0 ⇒ +(◦κ00 → ∗) → ∗
+∆ ` ∀κ ≤π ∀κ0 ⇒ −(◦κ00 → ∗) → ∗
++
+◦
+max = max = max
+max− = min
+∆ ` a↑ ≤π a0↑
+
+∆ ` S ≤π S 0 ⇔ ◦∗ → ∗
+0
+
+∆ ` µa S ≤π µa S 0 ⇒ ∗
+−∆ ` a↑ ≤−π a0↑
+
+∆ ` R ≤π R0 ⇔ ◦∗ → ∗
+0
+
+∆ ` ν a R ≤π ν a R0 ⇒ ∗
+We shall also define a judgment ∆ ` F ≤π F 0 ⇔ κ .
+∆ ` F ≤> F 0 ⇔ κ
+◦−1 ∆ ` κ1
+
+∆ ` A ≤π A0 ⇒ ∗
+∆ ` A ≤π A0 ⇔ ∗
+
+∆, X : π1 κ1 ` (F @ X) ≤π (F 0 @ X) ⇔ κ2
+∆ ` F ≤π F 0 ⇔ π1 κ1 → κ2
+
+∆ ` Sc ≤π Sc0 ⇔ κ for all c ∈ S
+
+∆ ` Rd ≤π Rd0 ⇔ κ for all d ∈ R
+
+∆ ` S ≤π S 0 ⇔ κ
+
+∆ ` R ≤π R 0 ⇔ κ
+
+Finally, we define the judgment ∆ ` A ≤ A0 , which is an entry point for subtyping.
+24
+
+4. Syntax
+∆ ` A ≤+ A0 ⇒ ∗
+∆ ` A ≤ A0
+
+4.3
+
+(Co)patterns
+
+The pattern machinery in System Fωcop, SCT is the same as in System Fωcop . In this
+section, we will briefly overview the process of pattern and copattern matching.
+The grammar for patterns is presented in Table 3.
+Pat
+3 p ::= x | () | (p1 , p2 ) | c p | Q p
+Copat 3 q ::= p | X | .d
+PatSp 3 q ::= q⃗
+
+Pattern
+Copattern
+Pattern spine
+
+Table 3: Grammar description for patterns
+
+Pattern spine may seem like a new concept, while in fact, it is a way to define pattern
+and copattern matching simultaneously.
+For example, consider the following pattern spine: q⃗ ≡ A x y (suc z) .force i w.
+It matches the function ∀A. List A → N → N → νWrapper∞ , where Wrapperi ≡
+{force : λX : ∗. N → N}. The result of spine matching yields a gathered type
+context ∆ ≡ {A : ∗, i : <∞} and term context Γ ≡ {x : List A, y : N, z : N, w : N}.
+Formally, the relation ∆; Γ `∆0 p ⇔ A defines the rules for typing pattern matching.
+Here, ∆0 is the type context in which the pattern matching occurs. As a result, new
+typing context ∆ and term context Γ are returned.
+·; x : A `∆0 x ⇔ A
+
+·; · `∆0 () ⇔ 1
+
+∆1 ; Γ1 `∆0 p1 ⇔ A1
+
+∆2 ; Γ2 `∆0 p2 ⇔ A2
+
+∆1 , ∆2 ; Γ1 , Γ2 `∆0 (p1 , p2 ) ⇔ A1 × A2
+
+∆; Γ `∆0 p ⇔ ∃j < a↑ .Sc (µj S)
+
+∆; Γ `∆0 ,X:κ p ⇔ F @κ X
+
+∆; Γ `∆0 c p ⇔ µa S
+
+X : κ, ∆; Γ `∆0 X p ⇔ ∃κ F
+
+Given the typing process for patterns, it is possible to consider copatterns as well.
+Here we define the relation ∆; Γ|A `∆0 q⃗ ⇒ C , where ∆ is the new typing context,
+Γ is the new term context, A is the currently eliminated type (i.e., the type of
+function for which the sequence of copatterns is defined), and C is the resulting
+type of the clause.
+·; ·|C `∆0 · ⇒ C
+
+∆1 ; Γ1 `∆0 p ⇔ A
+
+∆2 ; Γ2 |B `∆0 q⃗ ⇒ C
+
+∆1 , ∆2 ; Γ1 , Γ2 |A → B `∆0 p q⃗ ⇒ C
+
+∆; Γ|∀j < a↑ .Rd (ν j R) `∆0 q⃗ ⇒ C
+
+∆; Γ|F @κ X `∆0 ,X:κ q⃗ ⇒ C
+
+∆; Γ|ν a R `∆0 .d q⃗ ⇒ C
+
+X : κ, ∆; Γ|∀κ F `∆0 X q⃗ ⇒ C
+25
+
+4. Syntax
+
+4.4
+
+Invocation Graphs
+
+Before introducing the rules for type checking of terms, we need to explain the
+notion of invocation graphs, as it is the main tool for ensuring termination in
+System Fωcop, SCT . This concept is borrowed from [Jones et al., 2001] and generalized
+to meet our requirements.
+Invocation graphs serve as a description of recursive calls within the defined functions. Later, we shall define our termination criteria based on a set of invocation
+graphs.
+An invocation graph is a bipartite oriented simple graph, where the edges are unidirectional and labeled with either < or ≤. We use the following notation:
+• G as an invocation graph;
+• LG and RG as the parts of the graph, which can be thought of as being ”left”
+and ”right”.
+• LG = {l1 , . . . , ln }, RG = {r1 , . . . , rm };
+• EG : LG × RG ⇀ {<, ≤} as the set of edges;
+There is an enumeration on the nodes within parts, which implies that two graphs
+are not considered equal if there is a permutation of nodes that establishes an isomorphism. An example of an invocation graph can be found in Figure 1.
+L
+R
+1
+
+<
+6
+
+2
+
+≤
+7
+
+3
+
+<
+8
+
+4
+
+≤
+9
+
+5
+
+Figure 1: Example of an invocation graph
+The invocation graphs can be thought of as a generalization of a relation between two
+elements from an ordered set to tuples. The following concept captures this intuition.
+Let (S, ≤s ) be a partially ordered set. We define that two tuples ⃗s, s⃗0 ∈ S + conform
+to an invocation graph G if |⃗s| = |LG |, |s⃗0 | = |RG |, EG (li , rj ) = < implies si < s0j ,
+and EG (li , rj ) = ≤ implies si ≤ s0j . We shall write ⃗s ≺G s⃗0 if ⃗s and s⃗0 conform to a
+26
+
+4. Syntax
+graph G. This definition is a reformulation of the safe description from [Jones et al.,
+2001].
+We define the composition of invocation graphs G1 ◦ G2 where |RG1 | = |LG2 | as an
+invocation graph G3 , where LG3 := LG1 , RG3 := RG2 , and EG3 (li , rj ) = r00 if there
+exists such k that EG1 (li , rk ) = r and EG2 (lk , rj ) = r0 , where:
+• r00 = < if r = < or r0 = <;
+• r00 = ≤ otherwise.
+A visual example of composition for invocation graphs can be found on Figure 2.
+L
+1
+
+R
+<
+
+R
+
+L
+4
+
+2
+3
+
+≤
+
+8
+
+1
+
+6
+
+≤
+5
+
+≤
+
+L
+
+7
+
+≤
+
+9
+10
+
+=
+
+2
+3
+
+R
+<
+≤
+≤
+
+8
+9
+10
+
+Figure 2: Example of composition of invocation graphs
+Now we shall return to our type system. We define G(f, g) to be a set of invocation
+graphs indexed by textual symbols f and g, where G1 ∈ G(f, g), G2 ∈ G(g, h)
+implies |RG1 | = |LG2 |. The intuition behind this definition is that f and g represent
+the names of some functions, and an invocation graph corresponds to a call to
+function g within f . The left part of the invocation graph represents some ordered
+parameters of f , while the right part represents the arguments of g. The restriction
+on parts’ length thus makes sense, since we want g to have the same arity whenever
+it acts as an enclosing function of a called function.
+We are ready to define the rule ` G , which is our main termination criterion.
+S
+Let G∗ (f, g) := G
+{G1 ◦ G2 | ∃h. G1 ∈ G∗ (f, h) and G2 ∈ G∗ (h, g)}. Such
+set can be build by induction. Note that each G∗ is finite because the number of
+vertices in the invocation graphs with fixed parts is finite. We say that ` G if
+∀f. ∀G ∈ G∗ (f, f ). G = G ◦ G =⇒ ∃k. EG (lk , rk ) =<. This criterion mirrors the
+idea from the ”size-change termination criterion” [Jones et al., 2001].
+We can informally explain the idea behind ` G as ensuring that in every sequence of
+recursive calls, something is always decreased. For semantic justification, the reader
+is welcome to refer to section 5.3.
+
+4.5
+
+Terms
+
+The syntactic entities of terms that are used in the program are presented in Table 4.
+27
+
+4. Syntax
+Exp
+Intro
+App
+Fun
+Elim
+
+3 r, s, t
+3v
+3u
+3 f, g
+3e
+
+::= u | v | λ ⃗
+D
+::= () | (t1 , t2 ) | c t | G t
+::= x | f | r e
+
+Term
+Introduction term
+Applicative term
+Function name
+Elimination
+
+::= t | G | .d
+
+Table 4: Grammar description for terms
+
+For the type-checking process, we shall follow the idea of bidirectional type checking
+[Dunfield and Krishnaswami, 2021]. One important distinction from System Fωcop
+is that in our system, the checking is parameterized additionally by the environment of already type-checked functions Σ, the functions in the current mutualrecursive block Ξ, the set of invocation graphs G indexed by function symbols from
+Ξ, and the implicit size context Ψf . To shorten the rules below, we shall abbreviate
+Σ; Ξ; G; Ψf as Ω , unfolding where necessary.
+Σ; Ξ; G; Ψf ; ∆; Γ ` r ⇒ C is a judgement about expression typing (inference mode).
+Input: ` Σ, ` Ξ, ` G, ∆ ` Ψf , ` ∆, and ∆ ` Γ, along with r. Output: C with
+∆ ` C or failure.
+The following rules closely resemble those of System Fω and are therefore straightforward. We will not discuss them in details.
+(x : A) ∈ Γ
+
+Ω; ∆; Γ ` r ⇒ ν a R
+
+Ω; ∆; Γ ` x ⇒ A
+
+Ω; ∆; Γ ` r.d ⇒ ∀j<a↑ .Rd (ν j R)
+
+Ω; ∆; Γ ` r ⇒ A → B
+
+Ω; ∆; Γ ` s ⇔ A
+
+Ω; ∆; Γ ` r ⇒ ∀κ F
+
+∆ ` F0 ⇔ κ
+
+Ω; ∆; Γ ` r F 0 ⇒ F @κ F 0
+
+Ω; ∆; Γ ` r s ⇒ B
+∆`A
+
+Ω; ∆; Γ ` t ⇔ A
+
+Ω; ∆; Γ ` (t : A) ⇒ A
+The next two rules deserve a more detailed description, since this is a novelty of our
+system.
+We shall discuss the rule for inferring the type of a function from the global environment Σ deeper. In System Fωcop, SCT , Σ contains functions that have already
+been type-checked, implying that they are semantically safe to use. However, these
+functions might still describe non-trivial size dependencies within their signatures
+(see section 6.7). Therefore, we retain the size annotations in their signatures.
+(g : ∀Ψ.A) ∈ Σ
+
+∆ ` ⃗a ⇔ Ψ
+
+Σ; Ξ; G; Ψf ; ∆; Γ ` g ⃗a ⇒ A[⃗a/Ψ̂]
+Now we take a closer look at the rule for type-checking a usage of a function g
+taken from the same mutual block Ξ as f . The crucial aspect of this rule lies
+in its restriction: it allows only the usage of sizes that are permitted by some size
+28
+
+4. Syntax
+graph G(f, g). This restriction is fundamental for establishing the required semantic
+properties and ensuring the integrity of the program.
+(g : ∀Ψ.A) ∈ Ξ
+
+∆ ` ⃗a ⇔ Ψ
+
+G ∈ G(f, g)
+
+⃗a ≺G Ψf
+
+Σ; Ξ; G; Ψf ; ∆; Γ ` g ⃗a ⇒ A[⃗a/Ψ̂]
+The judgment Σ; Ξ; G; Ψf ; ∆; Γ ` r ⇔ C describes expression typing in checking
+mode. In this mode, we adhere closely to the rules laid out in [Abel and Pientka,
+2016], as no new rules are introduced. This mode ensures that expressions are
+checked against a given type C, with the additional context provided by the function
+environment Σ, mutual block Ξ, invocation graphs G, implicit size context Ψf , type
+context ∆, and term context Γ.
+Ω; ∆; Γ ` t1 ⇔ A1
+
+Ω; ∆; Γ ` () ⇔ 1
+
+Ω; ∆; Γ ` (t1 , t2 ) ⇔ A1 × A2
+
+Ω; ∆; Γ ` t ⇔ ∃(j < a↑ ). Sc (µj S)
+
+∆ ` F0 ⇔ κ
+
+Ω; ∆; Γ ` t ⇔ F @κ F 0
+0
+
+Ω; ∆; Γ ` c t ⇔ µa S
+
+Ω; ∆; Γ ` F t ⇔ ∃κ F
+
+Ω; ∆; Γ ` Dk ⇔ A for all k
+
+Ω; ∆; Γ ` r ⇒ A
+
+∆`A≤C
+
+Ω; ∆; Γ ` r ⇔ C
+
+⃗ ⇔A
+Ω; ∆; Γ ` λD
+
+4.6
+
+Ω; ∆; Γ ` t2 ⇔ A2
+
+Declarations
+
+At the top level, programs defined in System Fωcop, SCT consist of blocks of definitions.
+These blocks serve as the glue that combines all previously defined entities, including
+patterns, terms, and the introduction of invocation graphs.
+The syntactic categories for definitions are delineated in Table 12.
+DefCl
+Def
+Decl
+Block
+Prg
+Sig
+
+3D
+⃗
+3D
+3δ
+3Ξ
+3P
+3Σ
+
+::= {q → t}
+::= {D1 ; . . . ; Dn }
+⃗
+::= f : ∀Ψ. A = D
+::= mutual ⃗δ
+⃗ u
+::= Ξ;
+::= ⃗δ
+
+Definition clause
+Definition clauses
+Declaration
+Mutual block
+Program
+Signature
+
+Table 5: Grammar description for definitions
+
+We define Ω; ∆; Γ ` D ⇔ A as the rule for verifying a clause. We again note that
+the significance of the condition ∆ ` ∃∆0 is discussed in section 3.6 of [Abel and
+Pientka, 2016].
+∆0 ; Γ0 |A `∆ q⃗ ⇒ C
+
+∆ ` ∃∆0
+
+Ω; ∆, ∆0 ; Γ, Γ0 ` t ⇔ C
+
+Ω; ∆; Γ ` {⃗q → t} ⇔ A
+29
+
+4. Syntax
+The previous rule can be extended to handle a sequence of clauses, representing a
+case of definition. In our approach, each clause is independent, so we can introduce
+⃗ ⇔A.
+the rule for verifying such a sequence as Ω; ∆; Γ ` D
+Ω; ∆; Γ ` Dk ⇔ A for all k
+⃗ ⇔A
+Ω; ∆; Γ ` D
+Now we are ready to define a rule for type-checking a function symbol. An important
+aspect here is to remember the size context of the function and use it later to justify
+the recursive calls within the right-hand side of clauses of f . Since the size variables
+of f are common to all clauses, we include them in the typing context ∆ at this
+stage. Formally, the rule Σ; Ξ; G ` f is defined as follows:
+⃗ ⇔A
+Σ; Ξ; G; Ψ; Ψ; · ` D
+⃗
+Σ; Ξ; G ` f : (∀Ψ.A) = D
+Given the definitions provided above, we can introduce the typing rule Σ ` Ξ for a
+block. Note, that this rule implies the existence of a set of graphs seemingly appearing ”out of nowhere.” Although here the user is expected to provide these graphs, in
+section 6.5, we offer a method for inferring G from the information gathered earlier
+for the term.
+⃗ for all f ∈ Ξ ` G
+Σ; Ξ; G ` f : (∀Ψ.A) = D
+Σ`Ξ
+Similarly, we can define ` Σ as the typing rule for a set of signatures.
+`Σ Σ`Ξ
+`ΞΣ
+Finally, we are prepared to conclude and present a rule for checking the entire
+program, denoted as ` P . The program, informally comprising a set of functions
+defined earlier and a ”main” function, lends itself to a straightforward rule.
+`·
+
+`Σ
+
+Σ; ·; ·; ·; ` u ⇒ A
+` Σ; u
+
+30
+
+5
+Semantics
+We are interested in the strong normalization property of the provided system.
+System Fωcop, SCT is based on System Fωcop , for which strong normalization was established in [Abel and Pientka, 2016].
+The proof of strong normalization in [Abel and Pientka, 2016] can be decomposed
+into two parts.
+• First, there is a proof of the strong normalization of the underlying flavor of
+System Fω . This is essential to ensure that terms such as (λx. x x) (λx. x x) are
+not admissible in the calculus. The proof here relies on Girard-Tait reducibility
+candidates and can be directly applied to our system, as we do not alter the
+fundamental structure of the calculus itself.
+• The other part corresponds to justifying recursive calls and definition typing.
+This component is tied to the syntactical structure of sized types and the
+conditions governing the use of other functions from Σ and Ξ. This part
+underwent modifications in our system. The primary theoretical contribution
+of this thesis lies in establishing the proof that strong normalization persists
+in the presence of these changes.
+
+5.1
+
+Reduction Relation
+
+In this section, we will examine the reduction relation of System Fωcop, SCT , which
+remains consistent with that of System Fωcop . This relation is important for the proof
+of strong normalization, as the normalization process is defined with respect to the
+reduction relation.
+The judgement t / p & τ ; σ involves matching a term t against a pattern p and
+acquiring a type substitution τ and a term substitution σ.
+t / x & ·; t/x
+
+() / () & ·; ·
+
+t / p & τ; σ
+
+t / p & τ; σ
+c t / c p & τ; σ
+
+t1 / p1 & τ1 ; σ1
+
+F
+
+t / X p & F/X, τ ; σ
+
+t2 / p2 & τ2 ; σ2
+
+(t1 , t2 ) / (p1 , p2 ) & τ1 , τ2 ; σ1 , σ2
+Similarly, we define e / q & τ ; σ , which is a judgement about matching a copattern:
+31
+
+5. Semantics
+
+F / X & F/X; ·
+
+.d / .d & ·; ·
+
+And we also extend this to matching a pattern spine ⃗e / q⃗ & τ ; σ .
+· / · & ·; ·
+
+e / q & τ; σ
+
+⃗e / q⃗ & τ 0 ; σ 0
+
+e ⃗e / q q⃗ & τ, τ 0 ; σ, σ 0
+
+Given the definition of pattern matching, we are now able to define the rule of weak
+head reduction t 7→ t0 :
+⃗e / q⃗ & τ ; σ
+λ{⃗q → t} ⃗e e⃗0 7→ t τ σ e⃗0
+
+λDk ⃗e 7→ t0 for some k
+⃗ ⃗e 7→ t0
+λD
+
+λ⃗
+D ⃗e 7→ t0
+⃗ ∈Σ∪Ξ
+f = λD
+f ⃗e 7→ t0
+We can now define a reduction relation on terms t −→ t0 :
+t 7→ t0
+t −→ t0
+
+t1 −→ t01
+
+t2 −→ t02
+
+(t1 , t2 ) −→ (t01 , t2 )
+
+(t1 , t2 ) −→ (t1 , t02 )
+
+t −→ t0
+F
+t −→ F t0
+
+r −→ r0
+r e −→ r0 e
+
+t −→ t0
+c t −→ c t0
+
+s −→ s0
+r s −→ r s0
+
+Similarly, we define the rules of reduction on clauses D −→ D0 and definitions
+⃗ −→ D
+⃗0 :
+D
+⃗ −→ D
+⃗0
+D
+⃗ −→ λD
+⃗0
+λD
+
+t −→ t0
+{⃗q → t} −→ {q⃗0 → t0 }
+
+D −→ D0
+⃗ 1 , D, D
+⃗ 2 −→ D
+⃗ 1 , D0 , D
+⃗2
+D
+
+It is important to note that the reduction of clause can occurr only if the full pattern
+spine matches the provided arguments.
+
+5.2
+
+Strong Normalization of System Fωcop
+
+In this section, we will provide a brief overview of the proof of strong normalization
+for System Fωcop as presented in Section 4 of [Abel and Pientka, 2016]. We will not
+discuss all the technical details, so readers are encouraged to refer to the original
+source for a more in-depth understanding. Nonetheless, we find it important to
+offer insight into why the proof is modular, allowing for the omission of certain
+technicalities.
+The core concept of the proof involves the application of Girard-Tait reducibility candidates [Tait, 1967] [Girard, 1971], a standard technique for demonstrating strong
+normalization in typed lambda calculus. The fundamental idea is to interpret each
+type as a set of strongly normalizing terms (SN), referred to as reducibility candidates. The proof systematically follows the typing rules, demonstrating that all
+typing judgments ensure the type-checked term resides within a specific reducibility
+candidate.
+32
+
+5. Semantics
+Normally, it is insuﬀicient to merely require that a reducibility candidate is a set
+of strongly-normalizing terms. Let A denote such a set. The conventional requirements typically include:
+1. A ⊆ SN: ”each term in A is strongly normalizing”;
+2. If t ∈ A then {t0 | t −→ t0 } ⊆ A : ”A is closed under reduction”;
+For the next condition, we introduce the set of neutral terms NE: a term t ∈ NE if t is
+a redex, or t ⃗e is not a redex for all eliminations ⃗e. This set comprises ”good” terms
+that already manifest behavior required to a reducibility candidate. Specifically,
+either all their reducts are good, or they cannot reduce at all, and are therefore
+strongly normalizing.
+3. If t ∈ NE and {t0 | t −→ t0 } ⊆ A , then t ∈ A : ”A contains a neutral if all its
+redexes are in A ”.
+In [Abel and Pientka, 2016], they additionally define the relation of simulation,
+denoted as r0 ▷ ⃗r , with the following definition:
+∀⃗e. ∀t. r0 ⃗e 7→ t =⇒ ∃k. rk⃗e 7→ t
+The definition of simulation enables the handling of the application of functions
+defined by clauses. Notably, it introduces an additional requirement for reducibility
+candidates. In the definition below, Intro is a set of terms that take the form:
+() | (t1 , t2 ) | c t | G t.
+4. If t 6∈ Intro and {t0 | t −→ t0 } ⊆ A and t ▷ ⃗t where ⃗t ⊆ A , then t ∈ A : ”A
+is closed under simulation”.
+The remainder of the proof analyzes all judgment rules, ensuring that well-typed
+terms belong to the semantical interpretation of their types, which are reducibility
+candidates.
+We denote A as the least reducibility candidate that includes A .
+Assuming that the sizes form a well-founded set, the fixpoint operators are defined
+by the inflationary and deflationary iteration:
+µαF =
+
+S
+β<α
+
+F (µ β F )
+
+ν αF =
+
+T
+β<α
+
+F (ν β F )
+
+Here, the sizes are interpreted as ordinals, with ∞ representing the first uncountable
+ordinal.
+Now we shall overview the way of dealing with recursive functions in System Fωcop .
+For the rule of expression typing, [Abel and Pientka, 2016] introduces a special
+⃗ ∈ Σ have the property f ∈ JAK. This
+premise ⊨ Σ, asserting that all f : A = D
+premise is justified during the proof of soundness for definition typing and is employed to manage functions from the global signature Σ.
+The rule for the usage of a mutual-recursive function is more involved. Let us state
+here the typing rule for such a function as defined in [Abel and Pientka, 2016]. In
+the definition below, c is a constrained function definition that belongs to Σ.
+33
+
+5. Semantics
+
+(x : ∀Ψ.c =⇒ A) ∈ Γ
+
+∆ ` ⃗a ⇔ Ψ
+
+⃗
+∆ ` c[⃗a/Ψ̂]
+
+∆; Γ ` x ⃗a ⇒ A[⃗a/Ψ̂]
+For the soundness of this judgment to be established, ensuring the condition that x
+belongs to A is important.
+According to the rule of definition typing (Section 5.2 of [Abel and Pientka, 2016]),
+the term context is populated by instances of x that are confirmed to be situated
+within their reducibility candidate through lexicographical induction on the size measures, which semantically form tuples of ordinals. An opportunity for improvement
+becomes apparent: if an alternative justification for x being in A is provided, the
+proof of strong normalization would still hold. Subsequent sections will explain the
+applied modification.
+
+5.3
+
+Semantics of Invocation Graphs
+
+The aim of this section is to establish the semantic property of G. More specifically,
+we aim to demonstrate that when ` G, it implies that G forms a well-founded
+relation.
+Lemma 1 (Soundness of composition). Let (S, ≤s ) be a partially ordered set, and
+⃗a, ⃗b, ⃗c ∈ S + . Let G1 and G2 be two invocation graphs. If ⃗a ≺G1 ⃗b and ⃗b ≺G2 ⃗c, then
+⃗a ≺G1 ◦G2 ⃗c.
+Proof. Consider an edge EG1 ◦G2 (li , rk ). We have two cases:
+1. This edge is <. It means that either EG1 (li , rj ) = < or EG2 (lj , rk ) = <, where
+the other relation is either ≤ or <. By the transitivity or the partial order ≤s ,
+we conclude that ai <s ck .
+2. This edge is ≤. It means that EG1 (li , rj ) = ≤ and EG2 (lj , rk ) = ≤, which
+implies that ai ≤s ck by transitivity of ≤s .
+
+Corollary (Collapsing of finite chains). Consider a partially ordered set (S, ≤s ).
+If we have a sequence of tuples s⃗1 , s⃗2 , . . . , s⃗n and a sequence of invocation graphs
+G1 , . . . , Gn−1 where s⃗i ≺Gi si+1
+⃗ then s⃗1 ≺G1 ◦...◦Gn−1 s⃗n .
+Proof. By induction on n.
+We will now define the semantic interpretation of invocation graphs for our type
+system. Consider a set T := Fun × O+ , where Fun is a set of symbols representing
+function names, and O is a set of ordinals. We define the relation SCTG ⊂ T × T ,
+⃗ ∈ SCTG if and only if ∃G ∈ G(f, g). β⃗ ≺G ⃗
+where ((f, ⃗
+α), (g, β))
+α.
+Theorem 1 (Soundness of G). Assume ` G. Then SCTG is a well-founded relation.
+34
+
+5. Semantics
+Proof. The proof here proceeds rather classically: we shall prove that there are no
+infinite chains in SCTG .
+Consider an infinite chain (f1 , α⃗1 ), (f2 , α⃗2 ), . . . ∈ T ∗ , where ((fi , α⃗i ), (fi+1 , α⃗i+1 )) ∈
+SCTG . By definition of SCTG , we obtain an infinite sequence of invocation graphs
+G1 , G2 , . . . such that α⃗i+1 ≺Gi α⃗i . We denote this chain as M .
+We define PG := {(n, n0 ) | G = Gn ◦Gn+1 ◦Gn+2 ◦. . .◦Gn0 } for every invocation graph
+G. The set {PG | G ∈ M } is finite, because the number of all possible graphs in
+the closure of G is finite. For two different G, G0 , the sets PG and PG0 are mutually
+disjoint, because otherwise it would imply that G = G0 . Since any two numbers
+(n1 , n2 ) where n1 < n2 give rise to some invocation graph G = Gn1 ◦ . . . ◦ Gn2 , we
+know that each (n1 , n2 ) belong to some PG .
+We can consider an infinite graph where the nodes are natural numbers, and the
+edges are pairs of natural numbers. Then the each PG induces a coloring of edges.
+We state again that this coloring is finite. By the infinite Ramsey’s theorem [Ramsey,
+1930], we can conclude that there is an infinite subset R of natural numbers, such
+that all tuples (n, n0 ) ∈ R × R where n < n0 are located in the same PG . We shall
+denote such G as G◦ .
+Let n1 < n2 < n3 ∈ N . From the definition of PG◦ it follows that G◦ = Gn1 ◦ . . . ◦
+Gn2 ◦ Gn2 +1 ◦ . . . ◦ Gn3 = G◦ ◦ G◦ . By the condition ` G, we know that there is a
+vertex a such that (a, a, <) ∈ E(G◦ ).
+Now recall that we have α⃗i+1 ≺Gi α⃗i . If we view the set R as n1 , n2 , n3 , . . . then
+by corollary we know that α⃗n2 ≺G◦ α⃗n1 , α⃗n3 ≺G◦ α⃗n2 , …. In particular, it means
+that there is a position i such that αn1 ,i > αn2 ,i > αn3 ,i > . . ., which is an infinitely
+decreasing chain of ordinals. Since the set of ordinals is well-founded, this is impossible, which means that our original assumption that there is an infinite chain in
+SCTG is false.
+
+5.4
+
+Strong Normalization of System Fωcop, SCT
+
+In this section, we adapt the proof of strong normalization from System Fωcop to our
+new system. As previously mentioned, the focal point of our modification lies in
+how recursive functions are handled.
+
+5.4.1
+
+Interpretation of Sizes
+
+One modification in System Fωcop, SCT that we will account for is the introduction of
+meets into the size expressions.
+Let ρ ∈ J|∆0 |K be a substitution, representing the semantical interpretation of kinding contexts. Following [Abel and Pientka, 2016], we interpret syntactic sizes as
+ordinals.
+35
+
+5. Semantics
+Ji + nKρ
+J∞ + nKρ
+J(i + n) ∧ (j + m)Kρ
+Ja∧ ∧ (i + n)Kρ
+
+=
+=
+=
+=
+
+JiKρ + n
+∞+n
+min(Ji + nKρ , Jj + mKρ )
+min(Ja∧ Kρ , Ji + nKρ )
+
+The definition above has direct impact on theorem 16 of [Abel and Pientka, 2016].
+We shall state it here:
+Theorem 2 (Soundness of kind-level judgments). Let ` Ψ and let ρ ≤ ρ0 ∈ D :=
+JΨK.
+1. If Ψ ` a then JaKρ ≤ JaK0ρ ∈ O;
+2. If Ψ ` a ≤ b then JaKρ ≤ JbK0ρ ∈ O;
+3. If Ψ ` a < b then JaKρ < JbK0ρ ∈ O.
+Proof. By the definition of a < b and a ≤ b we see that operation ∧ indeed behaves
+like a minimum.
+Given the soundness of kind-level judgment, the rest of the proof proceeds as it is
+defined in [Abel and Pientka, 2016], until it reaches the changed rules of expression
+and definition typing.
+
+5.4.2
+
+Expression Typing
+
+Similar to System Fωcop , we also need to introduce the semantical interpretations of
+the conditions ` Σ and ` Ξ.
+The intuition behind the semantics of ` Σ lies in the fact that these are the functions
+that were type-checked before the current mutual block. Consequently, functions
+from Σ cannot reference anything from the present mutual block. This property
+enables the use of induction on the size of Σ, allowing us to assume, by induction
+hypothesis, that all these functions were type-checked earlier. Formally, we introduce
+⃗ ∈ Σ, Ψ ` ⃗a =⇒ f ⃗a ∈ JAKJ⃗aK . The
+the semantic judgment ⊨ Σ as (f : ∀Ψ.A = D)
+interpretation of this judgment is that all previously type-checked functions are safe
+with suitable ordinal vectors.
+The interpretation of ` Ξ is more complicated. The intuition behind the semantical
+interpretation of Ξ is that we consider a usage of a mutual-recursive function safe
+with certain ordinal vector (⃗
+α) only if there is a ”blueprint” (an invocation graph
+G) which permits this usage. Formally, we consider a judgment G, JΨf K ⊨ Ξ as
+⃗ ∈ Ξ. ∀⃗
+∀(g : Ψ.A = D)
+α ∈ JΨK. ∃G ∈ G(f, g). ⃗
+α ≺G JΨf K =⇒ g ⃗
+α ∈ JAK .
+α/Ψ̂
+⃗
+
+Theorem 3 (Soundness of expression typing in System Fωcop, SCT ). Assume:
+• ⊨ Σ, and ` ∆, and ∆ ` Γ, and ∆ ` C
+• D := J∆K, and E (ρ) = JΓKρ , and C (ρ) = JCKρ
+• ⊨ Σ, and G, JΨf K ⊨ Ξ, and ⊨ G
+36
+
+5. Semantics
+Then:
+1. If Σ; Ξ; G; Ψf ; ∆; Γ ` r ⇒ C, then D, E ` r ∈ C ;
+2. If Σ; Ξ; G; Ψf ; ∆; Γ ` r ⇔ C, then D, E ` r ∈ C ;
+3. If Σ; Ξ; G; Ψf ; ∆; Γ ` ⃗
+D ⇔ C, then D, E ` λ ⃗
+D∈C
+Proof. Our proof follows a structure similar to Theorem 35 in [Abel and Pientka,
+2016]. As the proof is compositional, proceeding to establish semantical counterparts
+for all typing rules, we will focus on the modified sections.
+Initially, we will address the typing of functions derived from the global environment
+Σ. Let’s revisit the typing judgment:
+(g : ∀Ψ.A) ∈ Σ
+
+∆ ` ⃗a ⇔ Ψ
+
+Σ; Ξ; G; Ψf ; ∆; Γ ` g ⃗a ⇒ A[⃗a/Ψ̂]
+With the precondition ⊨ Σ, we can straightforwardly deduce that g ⃗a ∈ JAKJ⃗aK . The
+rationale behind this is once again that all functions from Σ cannot reference the
+current function f .
+Handling the case of a locally mutual signature follows a similar approach, given
+the precondition of the semantical soundness of Ξ. Suppose we are checking the
+function g, and we have the following derivation:
+(g : ∀Ψ.A) ∈ Ξ
+
+∆ ` ⃗a ⇔ Ψ
+
+G ∈ G(f, g)
+
+⃗a ≺G Ψf
+
+Σ; Ξ; G; Ψf ; ∆; Γ ` g ⃗a ⇒ A[⃗a/Ψ̂]
+By the condition of semantical validity for Ξ, we can directly conclude that g ⃗a ∈
+JAKJ⃗aK .
+
+5.4.3
+
+Definition Typing
+
+In this subsection, we will integrate all the components and elucidate why exactly
+a well-typed mutually-recursive block comprises terminating functions.
+⃗ ∈ Ξ. f ∈ J∀Ψ. AK.
+We define Σ ⊨ Ξ as ∀(f : (∀Ψ. A) = Ψ̂D)
+Theorem 4 (Soundness of mutual blocks). If ⊨ Σ and Σ ` Ξ, then Σ ⊨ Ξ.
+Proof. Since we know that Σ ` Ξ, we can conclude that we also have ` G and
+⃗ ⇔ A for each f ∈ Ξ.
+Σ; Ξ; G; Ψf ; Ψf ; · ` D
+By Theorem 1, we know that G generates a well-founded relation SCTG . Our proof
+shall proceed by the well-founded induction on SCTG .
+Recall that the carrier set of relation SCTG is T ≡ Fun × O+ . The induction hypothesis is the following: given a function f and a semantic size vector ⃗
+α, we have
+f ⃗
+α ∈ JAK⃗α/Ψ̂ .
+37
+
+5. Semantics
+Now we will prove the step of induction. The induction hypothesis here states that
+for all functions g : ∀Ψ0 . B and semantic vectors β⃗ such that β⃗ ≺G ⃗
+α for some
+⃗
+G ∈ G(f, g), we necessarily have g β ∈ JBKβ/
+⃗ Ψ̂0 . Note, that this is precisely the
+definition of G, JΨf K ⊨ Ξ, which is a requirement to apply Theorem 3. In particular,
+it means that we can apply the Theorem 3, which results in f ⃗
+α ∈ JAKα/Ψ̂ .
+The last part here is the observation that in the definition of SCTG , the left part of
+the relation covers the entire space of possible functions and semantic vectors – if
+there is an absent pair of a function and a semantic vector, then it means that a
+recursive call would not be permitted with these sizes, which in turn means that
+the rule of local definition typing would not be applied during the type checking
+process. This allows to conclude that every definition in a mutual block belongs
+to the corresponding reducibility candidate, since all possible semantic vectors are
+covered.
+
+Now that we have established the soundness of individual mutual blocks, we can
+integrate them into the proof of soundness for the global signature.
+Lemma 2 (Soundness of global environment). If ` Σ, then ⊨ Σ.
+Proof. Since Σ consists of a set of mutual blocks, the proof proceeds by induction
+on the number of them. The empty set of blocks is semantically valid, and if ` Σ
+and Σ ` Ξ, then by the induction hypothesis we have ⊨ Σ, which implies Σ ⊨ Ξ,
+which in turn implies ⊨ ΞΣ.
+Finally, we can define what does it mean for a program to be sound. We define
+⊨ (Σ; u) as u ∈ SN, which indicates soundness of the program.
+Theorem 5 (Soundness of programs in System Fωcop, SCT ). If ` P , then ⊨ P .
+Proof. By Lemma 2, we have ⊨ Σ. Now, since u is well-typed and it uses the
+definitions in Σ, we conclude that u ∈ SN by Theorem 3.
+
+5.5
+
+Comparison of System Fωcop and System Fωcop, SCT
+
+In this section, we compare the expressive power of System Fωcop and System Fωcop, SCT .
+Specifically, we will demonstrate that any terminating set of functions in System Fωcop
+can also be accepted by System Fωcop, SCT , implying that System Fωcop, SCT is at least
+as powerful as System Fωcop .
+⃗ defined in System Fωcop . We
+Consider a mutual block Ξ = f : ∀Ψ.m =⇒ A = D
+cop
+define an operation of measure removal | · | : Ξ
+→ Ξcop, sct , which transforms
+a definition in System Fωcop to a definition in System Fωcop, SCT . It simply removes
+the measure from a type signature, i.e. |f : ∀Ψ.m =⇒ A = ⃗
+D| = f : ∀Ψ.A = ⃗
+D.
+38
+
+5. Semantics
+Here we indeed see that this operation transports definitions from System Fωcop to
+System Fωcop, SCT .
+Although we introduced measure removal for Ξ, we will refrain from implementing
+a similar operation for Σ. The rationale behind this decision is that in System Fωcop ,
+there already exists a measure erasure operation, applied after the verification of a
+mutual block. The motivation for this operation is that measures strictly serve as a
+tool for ensuring termination, and once the block is type-checked, measures become
+obsolete.
+Theorem 6 (Relation of System Fωcop, SCT and System Fωcop ). Assume a mutual
+block Ξ which is well-typed in System Fωcop (i.e. Σ ` Ξ in the sense of System Fωcop ).
+Then it is also the case that Σ ` |Ξ| in the sense of System Fωcop, SCT .
+Proof. Given that Σ ` Ξ in System Fωcop , we can see that there is a measure m,
+such that each f ∈ Ξ is parameterized by this measure. To prove that Σ ` |Ξ| in
+System Fωcop, SCT , we need to show that it is possible to construct a set of invocation
+graphs G such that ` G and Σ; Ξ; G ` f for every f ∈ |Ξ|.
+Let us fix any f ∈ Ξ. According to the rules of type-checking for the mutual block
+in System Fωcop , all mutually-recursive functions within f are replaced with term
+variables x with a constrained type. This constrained type allows to use x applied
+to a tuple of sizes that is lexicographically smaller than the initial measure.
+We express the lexicographic ordering as a set of special invocation graphs. Since all
+mutually-recursive functions share measures of the same size, we can generate a set
+of bipartite graphs with equal sizes. Let the length of measure as |m|. Without loss
+of generality, we assume that the order of variables in m coincides with the order of
+variables in Ψ.
+We generate a set of invocation graphs Gi . Assume ⃗a = LGi and ⃗b = RGi . Then
+EGi (aj , bj ) = ≤ if j < i, or < if j = i. We construct G(f, g) := {G1 , . . . , G|m| for
+every f, g ∈ Ξ. This process is illustrated on Figure 3.
+L
+
+R
+
+L
+
+<
+
+R
+
+L
+
+R
+
+≤
+
+≤
+
+<
+
+≤
+<
+
+...
+
+...
+G1
+
+...
+
+...
+G2
+
+...
+
+...
+G3
+
+Figure 3: Example of process for generation of graphs
+39
+
+5. Semantics
+Size tuple a⃗1 is lexicographically smaller than a⃗2 if there is i such that a1,1 =
+a2,1 , . . . , a1,i−1 = a2,i−1 and a1,i < a2,i . Note that this is precisely expressed by
+the a⃗2 ≺Gi a⃗1 . Similarly, if a⃗2 ≺Gi a⃗1 , then a⃗1 is lexicographically smaller than a⃗2
+by the same argument.
+The only thing left to prove is ` G. Notice, that Gi ◦ Gj = Gmin(i,j) : we have edges
+only between nodes in the opposite parts. In particular, it means that however
+we compose the graphs, there is always an edge < between the opposing nodes. It
+follows that any arbitrary composition satisfies the size-change termination criterion,
+which means ` G.
+Now we know that our method is at least as expressive as System Fωcop . Even more,
+we know that it is automatically has this expressive power, as we do not require
+to express measures explicitly. We conjecture that our method is not strictly more
+expressive than System Fωcop , following the ideas in [Ben-Amram, 2002].
+
+40
+
+6
+Inference
+The system introduced in the preceding chapters represents a modification of the
+original System Fω . As it stands, anyone interested in using it would need to extend
+their existing theory. This situation is less than ideal, as we aim to provide a means
+of using our system independently of the original theory. The elimination of the
+notion of syntactic measures from System Fωcop is a step in this direction.
+Upon closer inspection of the typing rules, it becomes evident that the only places
+requiring explicit user input are the rule for the application of a size-quantified function and the signature of functions. Indeed, the remaining rules follow a straightforward path: the judgment ∆ ` ∃∆0 is computable, and pattern, copattern, and spine
+matching proceed through well-defined algorithms.
+The language we are developing a termination checker for is not a classical System
+Fω , but rather a System Fω with patterns and copatterns, denoted as Fωc . For the
+sake of formality, we present the language in Appendix A. The rules themselves are
+not particularly interesting; the main motivation is to eliminate all mentions of size
+information from the syntax.
+Before discussing the rules, we need to introduce a meta-rule i fresh , stating that
+i is a size variable with a globally unique name.
+
+6.1
+
+Function Signature
+
+Throughout this and the following sections, we will illustrate the process of inference
+using a function for addition of two numbers. We use N as a notation for µhZ : λX :
+∗. 1; S : λX : ∗. Xi and Ni for the sized version of this fixpoint. We can see that
+the constructors of N are Z : 1 and S : N, following Peano arithmetic.
+In our approach, we choose to confine ourselves to functions in which all size parameters are independent. In general, it can be challenging to determine the exact
+restrictions on size dependencies that the user desires. Therefore, we opt for the
+most general size ascription possible — where we do not assert dependencies on
+sizes. Additionally, we decide to not have higher-order size quantification: signatures like ∀(j < ∞). (∀(i < ∞). Ni → Ni ) → Nj → Nj cannot be represented in our
+system. In fact, our types are effectively typed as ∀ι K and ∃ι K instead of ∀κ K and
+∃κ K, where ι is a simple kind.
+41
+
+6. Inference
+The function for addition, denoted as add, typically has the type N → N → N.
+According to the procedure outlined in the beginning of this section, our desired
+annotated type is ∀i : <∞. ∀j : <∞. Ni → Nj → N∞ .
+The encoding process is defined as follows. Initially, we take as input a well-formed
+type in terms of System Fωc . By well-formedness, we mean that it checks against
+the kind ∗. We then scan the type and generate a new free size variable each time
+we encounter an inductive definition. However, there is a subtlety: as explained
+in chapter 3, we aim to annotate with sizes only those fixpoints that are under
+the control of the user. During the encoding process, we track polarities and add
+new size variables only for negatively occurring µ-fixpoints and positively occurring
+ν-fixpoints.
+We formally define a rule π; ∆ `SCT A ⇒ Ψ; A0 that collects the size context of a
+term, suitable for processing later.
+• Input: ∆ `Fω A ⇔ ι, target polarity π (the processing usually starts with polarity +), context of free type variables ∆ (here we only track variables, since
+we are not interested in polarity annotations, as their well-formedness should
+be covered during kind-checking of A in System Fωc ). We also implicitly accept
+a set of polarity π ∗ – this polarity indicate when we should add a new size
+variable. For top-level function encoding we shall use π ∗ = −. Later we will
+encounter necessity to use encoding within terms, and there we shall use π ∗ = ◦
+• Output: a set of size generated fresh size variables Ψ and a size-annotated
+type A, which is suitable for System Fωcop, SCT .
+First, we present the ”simple” rules, i.e. ones that can be naturally derived from
+the rules of kind checking.
+π; ∆ `SCT 1 ⇒ ·; 1
+
+π; ∆ `SCT × ⇒ ·; ×
+
+π; ∆ `SCT →⇒ ·; →
+
+X : π0ι ∈ ∆
+π; ∆ `SCT X ⇒ ·; X
+∆ ` F ⇒ π 0 ι → ι0
+
+π; ∆ `SCT F ⇒ Ψ1 ; F 0
+
+π 0 π; ∆ `SCT G ⇒ Ψ2 ; G0
+
+π; ∆ `SCT F G ⇒ Ψ1 , Ψ2 ; F 0 G0
+π; ∆ `SCT ∀ι ⇒ ·; ∀ι
+
+π; ∆ `SCT ∃ι ⇒ ·; ∃ι
+
+π; ∆, X : ◦ι `SCT F ⇒ Ψ; F 0
+π; ∆ `SCT λX : ι. F ⇒ Ψ; F 0
+
+π; ∆ `SCT Sci ⇒ Ψi ; Sc0 i for all c1 , . . . , cn ∈ S
+π; ∆ `SCT S ⇒ Ψ1 , . . . , Ψn ; hSc0 1 , . . . , Sc0 n i
+π; ∆ `SCT Rdi ⇒ Ψi ; Rd0 i for all d1 , . . . , dn ∈ R
+π; ∆ `SCT R ⇒ Ψ1 , . . . , Ψn ; {Rd0 1 , . . . , Rd0 n }
+And here we present the rules of encoding for fixpoint operators. Our goal here
+to record ”interesting” size variables, that will be important during termination
+checking later. When we are encoding a top-level function, we are interested to
+42
+
+6. Inference
+capture size variables corresponding to the input positions, i.e., negative occurrences
+of inductive data types and positive occurrences of coinductive ones. The rest of
+occurrences are irrelevant for our encoding algorithm, so we directly put ∞ there.
+i fresh
+
+π; ∆ `SCT S ⇒ Ψ; S 0
+
+π; ∆ `SCT µS ⇒ (i < ∞), Ψ; µ S
+i
+
+i fresh
+
+π; ∆ `SCT R ⇒ Ψ; R0
+
+π; ∆ `SCT νR ⇒ (i < ∞), Ψ; ν R
+i
+
+0
+
+0
+
+π = π∗
+
+π = −π ∗
+
+π; ∆ `SCT S ⇒ Ψ; S 0
+∞
+
+π; ∆ `SCT µS ⇒ Ψ; µ S
+
+0
+
+π 6= π ∗
+
+π; ∆ `SCT R ⇒ Ψ; R0
+∞
+
+π; ∆ `SCT νR ⇒ Ψ; ν R
+
+0
+
+π 6= −π ∗
+
+The rules above mirror typing judgment ∆ ` A ⇒ κ. This observation can be
+captured in the following theorem.
+Theorem 7 (Well-formedness of type encoding). If π; ∆ `SCT A ⇒ Ψ; A0 , then
+∆ ` ∀Ψ.A0 .
+Proof. The proof proceeds by induction on type derivations for π; ∆ `SCT A ⇒ Ψ; A0 ,
+where the induction hypothesis is ∆, Ψ ` A0 . The only rules that are changed
+from System Fωcop, SCT are the ones for encoding fixpoints. There we create only
+unbounded size variables, which means that the type context Ψ, ∆ will always be
+well-formed. Also, since the generated size variables immediately appear in Ψ, we
+can conclude that the induction claim holds.
+Now we define the relation ∆ ` i ∈π F , which states that size variable i occurs
+as index to a fixpoint operator F with the polarity π in the typing context ∆. In
+text, we shall often say that i occurs positively (negatively) in F if ∆ ` i ∈+ F
+(∆ ` i ∈− F ).
+∆ ` i ∈+ µi S
+
+∆ ` i ∈+ ν i R
+
+∆ ` i ∈π S
+
+∆ ` i ∈π R
+
+∆ ` i ∈π µ S
+
+∆ ` i ∈π ν j R
+
+j
+
+∆ ` F ⇒ π 0 ι → ι0
+
+∆ ` G ∈π0 π G0
+
+∆ ` F ⇒ π 0 ι → ι0
+
+∆ ` G ∈π F @X
+
+∆ ` G ∈π F G0
+
+∆ ` G ∈π F G0
+
+∆ ` i ∈π Sci for any c1 , . . . , cn ∈ S
+
+∆ ` i ∈π Rdi for any d1 , . . . , dn ∈ R
+
+∆ ` i ∈π S
+
+∆ ` i ∈π R
+
+For example, in the type F ≡ (µi (λX. 1)) → (ν j (λX. 1)), we have · ` i ∈− F and
+· ` j ∈+ F .
+Lemma 3 (Polarities of size annotations). If +; ∆ `SCT A ⇒ Ψ; A0 where π ∗ = −,
+then for every i ∈ Ψ only one of the following facts is true:
+• If i was generated for the least fixpoint µ, then i occurrs negatively in A0 ;
+• If i was generated for the greatest fixpoint ν, then i occurrs positively in A0 .
+Proof. First, we shall observe that exactly one of the facts above is true: all generated variables are fresh and used only once in the typing rules, which means that if
+43
+
+6. Inference
+i ∈ Ψ, then it was generated for either least or greatest fixpoint.
+Now the proof proceeds by induction on the structure of encoding relation for A.
+All cases are covered by the the inductive hypotheses, except for the case of creation
+of fresh variables for fixpoints. But for inductive fixpoints we have a guarding
+polarity π ∗ = −, which means that i corresponds to the negative position. Dually,
+for coinductive fixpoints the guarding polarity is −π ∗ = +, which means that i
+corresponds to a positive position.
+
+6.2
+
+(Co)pattern Matching
+
+In this section, we explain the process of pattern and copattern matching. The
+core idea is that when a function is defined by pattern-matching, it populates a set
+of rigid variables, which later must serve as valid size arguments in the bodies of
+clauses. Conceptually, pattern-matching introduces smaller terms into the scope,
+and copattern matching allows to use corecursive calls of smaller depth.
+Continuing with our example of add, given our fixed encoding of patterns and copatterns, the insertion of synthetic sizes is straightforward: any decomposition of a
+pattern introduces a new size variable. For instance, the insertion of rigid variables
+is accomplished as follows:
+add: ∀i : <∞. ∀j : <∞. Ni → Nj → N
+= { i j (Z i1 ()) y → y
+; i j (S i2 x) y → S (add x y)
+}
+Here, {i, j, i1 } are the rigid variables for the first clause, and {i, j, i2 } are rigid
+variables for the second clause.
+We shall now present ∆0 `SCT p : A ⇒ Γ; ∆; Ψ; p0 , which is the algorithm of gathering rigid variables.
+c
+0
+• Input: ∆; Γ `∆
+Fω p ⇔ A as a term in System Fω .
+
+• Output: the gathered term context Γ, the gathered type context ∆, the set of
+rigid variables Ψ, size-annotated pattern p0 .
+∆0 `SCT x : A ⇒ x : A; ·; ·; x
+∆0 `SCT p1 : A1 ⇒ Γ1 ; ∆1 ; Ψ1 ; p01
+
+∆0 `SCT () : 1 ⇒ ·; ·; ·; ()
+∆0 `SCT p2 : A2 ⇒ Γ2 ; ∆2 ; Ψ1 ; p02
+
+∆0 `SCT (p1 , p2 ) : A1 × A2 ⇒ Γ1 , Γ2 ; ∆1 , ∆2 ; Ψ1 , Ψ2 ; (p01 , p02 )
+j fresh
+
+∆0 , (j : <a) `SCT p : Sc (µj S) ⇒ Γ; ∆; Ψ; p0
+
+∆0 `SCT c p : µa S ⇒ Γ; (j : <a), ∆; (j : <a), Ψ; c (j<a p0 )
+∆0 , X : ι `SCT p : F @ι X ⇒ Γ; ∆; Ψ; p0
+∆0 `SCT X p : ∃ι F ⇒ Γ; X, ∆; Ψ; X p0
+44
+
+6. Inference
+Once more, the generation of rigid variables follows a pattern similar to the rules
+for pattern-matching in System Fωcop, SCT , which we can encapsulate in the following
+theorem.
+Theorem 8 (Well-formedness of pattern matching). If ∆0 `SCT p : A ⇒ Γ; ∆; Ψ; p0
+then ∆; Γ `∆0 p0 ⇔ A.
+Proof. Here we repeat the process of pattern-matching in System Fωcop, SCT , so the
+proof proceeds by induction on the structure of p. The only rule that is changed is
+the rule of matching a constructor, but here we making a well-formed pattern p0 by
+augmenting it with a fresh size.
+Similarly, we can define ∆0 `SCT q⃗ : A ⇒ C; Γ; ∆; Ψ; q⃗0 – the rule of gathering rigid
+variables in a pattern spine.
+• Input: a list of pure copatterns q⃗ of System Fωc , a size-encoded type A, a typing
+context ∆0 . Here we also require that ∆; Γ|A0 `Fω ∆0 q⃗ ⇒ C 0 for A0 such that
++; ∆0 `SCT A0 ⇒ A; _.
+• Output: a sized type of the clause body C, gathered term context Γ, gathered
+type context ∆, gathered set of rigid variables Ψ, and the size-annotated
+pattern spine q⃗0 .
+∆0 `SCT · : A ⇒ A; ·; ·; ·; ·
+∆0 `SCT p : A ⇒ Γ1 ; ∆1 ; Ψ1 ; p0
+
+∆0 `SCT q⃗ : B ⇒ C; Γ2 ; ∆2 ; Ψ2 ; q⃗0
+
+∆0 `SCT p q⃗ : A → B ⇒ C; Γ1 , Γ2 ; ∆1 , ∆2 ; Ψ1 , Ψ2 ; p0 q⃗0
+j fresh
+
+∆0 , j : <a `SCT q⃗ : Rd (ν j R) ⇒ C; Γ; ∆; Ψ; q⃗0
+
+∆0 `SCT .d q⃗ : ν a R ⇒ C; Γ; (j : <a), ∆; (j : <a), Ψ; .d j q⃗0
+∆0 , X : ι `SCT q⃗ : F @ι X ⇒ C; Γ; ∆; Ψ; q⃗0
+∆0 `SCT X q⃗ : ∀ι F ⇒ C; Γ; X : ι, ∆; Ψ; X q⃗0
+Theorem 9 (Well-formedness of copattern matching). If ∆0 `SCT q⃗ : A ⇒ C; Γ; ∆; q⃗0 ;
+then ∆; Γ | A `∆0 q⃗0 ⇒ C.
+Proof. Again, the proof proceeds by induction on q⃗. Since the process of rigid
+variable generation for copatterns repeats the process of copattern matching in
+System Fωcop, SCT , the claim follows directly from the rules.
+The next lemma explains how rigid variables are organized in a pattern.
+Lemma 4 (Polarities of rigid variables in patterns). Consider a System Fωcop, SCT
+type A0 , type context ∆0 , and a pattern p.
+If
+45
+
+6. Inference
+• A0 is a size-annotated type, where all size variables for inductive types occur
+negatively, and all size variables for coinductive types occur positively;
+• A0 is pattern-eliminated, and Ψ is a set of rigid variables, i.e., ∆0 `SCT p :
+A0 ⇒ Γ; ∆; Ψ; p0 ;
+Then for every i ∈ Ψ exactly one of three statements holds:
+1. There exists x : B ∈ Γ, such that µi occurs positively in B;
+2. There exists x : B ∈ Γ, such that ν i occurs negatively in B;
+3. There is no x : B such that i occurs in B.
+Proof. The proof proceeds by induction on the structure of the encoding derivation
+∆0 `SCT p : A0 ⇒ Γ; ∆; Ψ; p0 .
+In the rule of matching of a type A against a variable, the context gets extended
+by a variable with a currently matched type. Since now all inductive fixpoints are
+occurring positively and all coinductive fixpoints are occurring negatively in A, all
+rigid variables in A satisfy either 1 or 3.
+The rule of matching against product preserves occurrences, because product is
+covariant in both its components, hence the theorem holds here by the induction
+hypothesis.
+The rule of matching against constructor holds by inductive hypothesis, because
+µj S is located in positive positions in Sc , hence j would occur positively in Sc (µj S).
+The variable corresponding to a in this case satisfies statement 3.
+The rule of matching against the existential quantifier does not change the occurrences of variables, hence the claim here holds by induction hypothesis.
+The next lemma states that the set of generated rigid variables can be classified
+by four groups. This classification is the basis of our proof of soundness for the
+termination checking algorithm.
+Lemma 5 (Polarities of rigid variables in copattern spines). Consider a System Fωcop, SCT
+type A0 , type context ∆0 , and a clause {⃗q → t}.
+If
+• A0 is a size-annotated type, where all size variables for inductive types occur
+negatively, and all size variables for coinductive types occur positively;
+• A00 is obtained after copattern-elimination of A0 , and Ψ1 , Ψ2 is a set of rigid
+variables, i.e., ∆0 , Ψ1 `SCT q⃗ : A0 ⇒ A00 ; Γ; ∆; Ψ2 ; q⃗0 ;
+Then for every i ∈ Ψ1 , Ψ2 exactly one of four statements holds:
+1. There exists x : B ∈ Γ, such that µi occurs positively in B;
+2. µi occurs negatively in A00 ;
+46
+
+6. Inference
+3. At least one of two facts is true: there exists x : B ∈ Γ, such that ν i occurs
+negatively in B, or ν i occurs positively in A00 ;
+4. i does not occur in A00 and there is no x : B such that i occurs in B.
+One can notice an asymmetry between inductive and coinductive size variables for
+fixpoints. This is due to fact that rigid size variables for inductive fixpoints are
+generated during the pattern-matching process, and hence only types of variables
+in term context Γ can mention them. On the other hand, coinductive size variables
+can be mentioned in both domain and codomain parts: consider a coinductive type
+R ≡ {force : λX. (X → ⊥) → X}. During pattern spine matching of Ri against a
+copattern spine q⃗ ≡ force f , the eliminated type is (Rj → ⊥) → Rj for some j < i.
+This means that the eliminated codomain is Rj where j occurs positively, and there
+is f : (Rj → ⊥) ∈ Γ where j occurs negatively. We thank Andreas Abel for this
+observation.
+This lemma has a relaxed premise, that talks about occurrences of size variables for
+fixpoint operators in the eliminated type. By Lemma 3, it follows that +; ∆0 `SCT A ⇒
+Ψ1 ; A0 for π ∗ = − satisfies the premise for some type A that has unannotated fixpoints. This relaxation is required because the same size variable for coinductive
+fixpoint can occur multiple times in the signature, so we have to make the induction
+hypothesis work.
+Proof. The proof proceeds by induction on copattern spine length, and then by
+induction of each pattern structure. The inductive hypothesis here is the statement
+of the theorem, and it will be incrementally shown for all generated rigid variables.
+We now address the polarities in the copattern spine. The rule of empty spine does
+not alter A0 , which means that the polarities in A0 would be the same as in A00 , hence
+by Lemma 3 the statement of this lemma holds. The rule of elimination with a type
+variable does not change positions of fixpoints in A0 , hence this case also satisfies
+the statement of the theorem by induction hypothesis.
+The rule of elimination with a destructor introduces a new rigid variable j, which
+occurs in Rd (ν j ) positively due to positivity of record types. Hence, Rd (ν j ) satisfies
+the requirements of this theorem, and induction hypothesis is applicable to this type.
+In this case, the variable corresponding to a does not occur anywhere, which means
+that it satisfies 5.
+The rule of elimination of an arrow type A → B with a pattern has two premises:
+one for the pattern of type A, and another one for the remaining copattern spine
+of type B. The copattern spine can be directly handled by induction hypothesis,
+since the polarities of fixpoints are not changed in the codomain of an arrow type –
+the arrow type is covariant in its codomain. The domain, however, is contravariant,
+which means that the polarities of all occurrences are now inverted. In particular,
+it means that all negatively occurring fixpoints in A → B would occur positively in
+A, and dually all positively occurring fixpoints would be negative. The statement
+of the theorem here holds by Lemma 4.
+47
+
+6. Inference
+
+6.3
+
+Call-Site Inference
+
+The analysis of terms is the most crucial part of the inference process, as it is used
+to generate the certificate of termination. Recall that we use applications of sizes
+only in places where we apply a function from the global or local signature or in
+constructors.
+For the purpose of inference, we introduce the set of flexible variables, later denoted
+as Φ ⊂ SizeVar × π. Each flexible variable comes with a specific polarity π 6= >.
+Flexible variables are generated at the locations of constructors, function call sites,
+and the introductions of fixpoints.
+The primary objective of call-site inference is the process of collecting constraints
+C ⊂ SizeExp×SizeExp×{<, ≤}, which is a set of possible relations between flexible
+variables. The carrier of relationships here is the size expression, as sometimes we
+want to assert that a flexible variable depends on ∞ or bounded by a minimum.
+For example, the call-site inference for the function add generates a set of flexible
+variables Φ ≡ {(k1 , ◦), (k2 , ◦), (k3 , ◦)}, so the body of the function with inserted sizes
+has the following representation:
+add: ∀i : <∞. ∀j : <∞. Ni → Nj → N
+= { i j (Z i1 ()) y → y
+; i j (S i2 x) y → S k1 (add k2 k3 x y)
+}
+The set of gathered constraints should reflect the expected relations in the definition.
+Following this logic, we have i2 ≤ k2 and j ≤ k3 (because k1 and k2 act as the
+expected sizes of arguments for add). k1 is irrelevant here: the size of the output for
+add is ∞, so the algorithm produces a constraint ∞ < k1 , which indicates that k1
+must be assigned to infinity. Returning back to the arguments, we can satisfy the
+constraints by the assignment k2 := i2 , k3 := j. From this assignment, we can see
+that add is invoked with a size smaller than i, hence it is terminating.
+The algorithm also collects the size variables generated for non-recursive constructors
+(like Z in N). This set is denoted T (the name originates from the fact that the
+corresponding constructor has polarity > in its size parameter).
+We motivate the introduction of T by the following example:
+f: ∀i : <∞. Ni → N∞
+= { i (Z i1 ())
+→ Z k1 ()
+; i (S i2 (Z i3 ())) → Z k2 ()
+; i (S i4 (S i5 x)) → f k3 (Z k4 ())
+}
+This function is terminating; however, the set of constraints here is only k4 < k3 ,
+which does not allow us to produce a termination criterion. But k4 ∈ T, hence
+48
+
+6. Inference
+our algorithm has a special handling of it. Our design choice is to assign k4 to the
+minimum of all available rigid variables, which means that there is another constraint
+i5 ∧i4 ∧i ≤ k4 , which means that k3 will be assigned to i4 , hence providing a necessary
+termination certificate.
+
+6.3.1
+
+Inference rules
+
+Formally, we introduce the judgment Φ; Γ; ∆ `SCT t ⇒ A; Φ0 ; C; T; t0 .
+• Input: the set of existing flexible variables Φ, term context Γ, type context ∆,
+System Fωc term t.
+• Output: size-annotated term A, a modified set of flexible variables Φ0 , a set of
+gathered constraints C, a set of non-recursive variables T, and a size-annotated
+term t0 .
+Essentially, the judgment can be simplified to `SCT t ⇒ C, where the remaining
+elements are required for the completeness of the formal description. For example,
+the pair of Φ and Φ0 acts as a state monad for this computation.
+The presentation of rules mostly reflects the algorithm of type inference for System Fωcop, SCT .
+The rules of inference for a variable and an application are quite straightforward, as
+they do not involve sizes.
+(x : A) ∈ Γ
+Φ; Γ; ∆ `SCT x ⇒ A; Φ; ·; ·; x
+Φ; Γ; ∆ `SCT r ⇒ A → B; Φ1 ; C1 ; T1 ; r0
+
+Φ1 ; Γ; ∆|A `SCT s ⇒ Φ2 ; C2 ; T2 ; s0
+
+Φ; Γ; ∆ `SCT r s ⇒ B; Φ2 ; C1 , C2 ; T1 , T2 ; r0 s0
+The rule for the application of a destructor is sized, meaning it requires remembering
+that the size of the destructed term is less than the size of the destructed record.
+Therefore, we add new constraints. Since the new size variable corresponds to a
+coinductive type, we associate the contravariant polarity ”−” with it.
+j fresh
+
+Φ; Γ; ∆ `SCT r ⇒ ν a R; Φ0 ; C; T; r0
+
+T0 ≡ T ∪ {j, if ν j R is unused in Rd }
+
+Φ; Γ; ∆ `SCT r.d ⇒ Rd (ν j R); (j, −), Φ0 ; (j < a), C; T0 ; r0 .d j
+The next couple of rules involve interaction with a type from System Fω . To successfully use them in System Fωcop , we need to convert them to the sized version first.
+Since these types can be used arbitrarily, we cannot make any assumptions about
+the polarity of the fixpoints mentioned there. Therefore, we assume the mixed polarity ”◦” on them. We also associate a mixed polarity with the fresh size variables
+that occur in the encoded type. Note that during the encoding process, we generate
+constraints of the form i < ∞ (i.e., the left-hand side is always a variable).
+◦; ∆ `SCT G ⇒ Ψ; G0 for π ∗ = ◦
+
+Φ; Γ; ∆ `SCT r ⇒ ∀ι F ; Φ0 ; C; T; r0
+
+Φ; Γ; ∆ `SCT r G ⇒ F @ι G0 ; {(j, ◦) | (j ≤ _) ∈ Ψ}, Φ0 ; C; T; r0 G0
+49
+
+6. Inference
+◦; ∆ `SCT A ⇒ Ψ; A0 for π ∗ = ◦
+
+Φ; Γ; ∆|A0 `SCT t ⇒ Φ0 ; C; T; t0
+
+Φ; Γ; ∆ `SCT (t : A) ⇒ A0 ; {(j, ◦) | (j ≤ _) ∈ Ψ}, Φ0 ; C; T; (t0 : A0 )
+Finally, we explain the rule for inserting flexible variables for a call to another
+function. According to the typing rules, for a function with type ∀Ψ. A, we need to
+completely eliminate the prepended size context Ψ. We achieve this by inserting an
+appropriate number of size variables. Since the function type is encoded according to
+the algorithm in section 6.1, we know that some of the sizes correspond to the least
+d and Ψ
+d
+fixpoints, and some of them are for the greatest fixpoints. We denote Ψ
++
+−
+correspondingly for these parts of the size context. We can use this information to
+associate a more precise polarity to generated flexible variables, leading to a simpler
+graph of constraints.
+The rule here is unified for Σ and Ξ because, from the position of type-checking, they
+are identical. The termination criterion with invocation graphs in System Fωcop, SCT
+is important for ensuring the necessary semantical properties of the program, and
+we shall address it later in Theorem 13.
+⃗a fresh ⃗b fresh (g : ∀Ψ.A) ∈ Ξ ∪ Σ
+−−→ −−−→
+d , ⃗b/Ψ
+d ]; −
+Φ; Γ; ∆ `SCT g ⇒ A[⃗a/Ψ
+a ⃗b
++
+− (a, +), (b, −), Φ; ·; ·; g ⃗
+
+6.3.2
+
+Checking rules
+
+Similarly, we can mirror the judgment rule for checking, Φ; Γ; ∆|A `SCT t ⇒ Φ0 ; C; T; t0 .
+• Input: a set of flexible variable Φ, a term context Γ, a type context ∆, a
+size-annotated type A, and a System Fωc term t.
+• Output: a set of modified flexible variables Φ0 , a set of generated constraints
+C, a set of nonrecursive variables T, and a size-annotated term t0 .
+The rules of checking introduction of a unit, tuple, and generalized lambda are
+straightforward.
+Φ; Γ; ∆|1 `SCT () ⇒ Φ; ·; ·; 1
+Φ; Γ; ∆|A1 `SCT t1 ⇒ Φ1 ; C1 ; T1 ; t01
+
+⃗0
+Φ; Γ; ∆|A `SCT ⃗
+D ⇒ Φ0 ; C; T; D
+⃗ ⇒ Φ0 ; C; T; λD0
+Φ; Γ; ∆|A `SCT λD
+Φ; Γ; ∆|A2 `SCT t2 ⇒ Φ2 ; C2 ; T1 ; t02
+
+Φ; Γ; ∆|A1 × A2 `SCT (t1 , t2 ) ⇒ Φ1 , Φ2 ; C1 , C2 ; T1 , T2 ; (t01 , t02 )
+The rule for using a constructor, again, requires manipulation with sizes. We introduce a flexible variable with positive polarity and record the constraint that it is
+smaller than the constructed inductive fixpoint.
+j fresh
+
+(j, +), Φ; Γ; ∆|Sc (µj S) `SCT t ⇒ Φ0 ; C; T; t0
+
+T0 ≡ T ∪ {j if µj S is unused in Sc }
+
+Φ; Γ; ∆|µa S `SCT c t ⇒ Φ0 ; (j < a), C; T0 ; c j t0
+The rule for constructing an inhabitant of an existential type, similarly to the rule
+of inference for ∀, requires encoding of the corresponding System Fω type.
+50
+
+6. Inference
+◦; ∆ `SCT G ⇒ Ψ; G0
+
+Φ; Γ; ∆|F @ι G0 `SCT t ⇒ Φ0 ; C; T; t0
+0
+
+Φ; Γ; ∆|∃ι F `SCT G t ⇒ Φ0 ; C; T; G t0
+Following the algorithm of bidirectional type checking, we also present a rule of
+transition from inference to checking. This rule is the reason for carrying Φ in a statemonad style, as the process of comparison needs access to all available variables.
+Φ; Γ; ∆ `SCT r ⇒ A; Φ0 ; C1 ; T; r0
+
+Φ0 ; ∆; ∗ `SCT A ≤+ C ⇒ C2
+
+Φ; Γ; ∆|C `SCT r ⇒ Φ0 ; C1 , C2 ; T; r0
+Before proceeding to the next section, we need to specify the rule of trivializing the
+context Φ `↓ Ψ1 ⇒ Ψ2 . This rule removes dependencies in Ψ1 on Φ, resulting in
+a simpler context Ψ2 . The motivation for this operation is to satisfy the context
+extension check ∆ ` ∃∆0 .
+↓
+
+Φ` ·⇒·
+
+Ψ `↓ Ψ1 ⇒ Ψ2
+
+if (a, _) ∈ Φ then b ≡ ∞ else b ≡ a
+
+Φ `↓ Ψ1 , (i : <a) ⇒ Ψ2 , (i : <b)
+
+Concluding the bidirectional checking process, we specify the rules for checking a set
+⃗ ⇒ Φ0 ; C; T; D
+⃗0 :
+of clauses Φ; Γ; ∆|C `SCT D ⇒ Φ0 ; C; T; D0 and Φ; Γ; ∆|C `SCT D
+Φ; Γ; ∆|C `SCT Dk ⇒ Φk ; CK ; Tk ; Dk0 for all k
+⃗ ⇒ S Φk ; S C k ; S T k ; D
+⃗0
+Φ; Γ; ∆|C `SCT D
+k
+
+∆ `SCT q⃗ : C ⇒ C 0 ; Γ0 ; ∆0 ; Ψ; q⃗0
+
+Φ `↓ Ψ ⇒ Ψ0
+
+k
+
+k
+
+Φ, Ψ0 ; Γ, Γ0 ; ∆, ∆0 |C 0 `SCT t ⇒ Φ0 ; C; T; t0
+
+Φ; Γ; ∆|C `SCT {⃗q → t} ⇒ Φ0 ; C; T; q⃗0 → t0
+
+6.3.3
+
+Comparison of types
+
+The rule of transition from inference to checking is important, as it is the main source
+of constraints. For example, in our add function, the dependency between arguments
+and parameters of the recursive call was recorded precisely at this moment. Formally,
+we write Φ; ∆; ι `SCT A ≤π B ⇒ C , where
+• Input: a set of variables Φ, type context ∆, expected kind ι, size-annotated
+types A and B which are compared, and polarity of comparison π.
+• Output: a set of generated constraints C.
+Note that we are comparing types obtained from System Fωcop, SCT . We should also
+note that the rules here are simpler than the rules for System Fωcop, SCT , as the
+kinding system in System Fω does not feature subtyping, hence we can limit ourselves
+only to simple kinds.
+The rule of comparison for applied type operators is presented here in a generalized
+way, and it should feature the product of polarities to compare its arguments. For
+example, if F is →, then it comes with polarity ”−”, which essentially means that
+the function type constructor is contravariant in the first parameter.
+51
+
+6. Inference
+Φ; ∆; π1 ι1 → ι2 `SCT F ≤π F 0 ⇒ C1
+
+Φ; ∆; ι1 `SCT G ≤π1 π G0 ⇒ C2
+
+Φ; ∆; ι2 `SCT F G ≤π F 0 G0 ⇒ C1 , C2
+The next two rules require the most explanation, as they are about the comparison
+of fixpoints. An intended way to look at this rule is to consider it as an algorithm in
+the context of all previous development. Thus, in the rule for comparing µ-fixpoints,
+the only available polarities of a and b are either ◦ or +, which would mean that
+the provided constraints are either π or ◦. This approach reflects the covariance
+of flexible variables for inductive types. Similarly, the only available polarities of a
+and b for ν-fixpoints are − and ◦, which results in constraints stored with −π or
+◦ polarity. The motivation here is the contravariance of coinductive types and our
+”depth” argument in chapter 3.
+Note that due to our algorithms, we never have the meet of size variables as a size
+expression, which means that the only possible size annotations for fixpoints are
+size variables or infinity. To provide a rule that covers all these cases, we extend
+our set of gathered flexible variables with a ”fake” infinity variable, which has a
+corresponding polarity to respect its fixpoint.
+(a, π1 ) ∈ Φ ∪ {(∞, +)}
+
+(b, π2 ) ∈ Φ ∪ {(∞, +)}
+
+Φ; ∆; ◦∗ → ∗ `SCT S ≤π S 0 ⇒ C
+
+Φ; ∆; ∗ `SCT µa S ≤π µb S 0 ⇒ a ≤max(π1 ,π2 ) π b, C
+(a, π1 ) ∈ Φ ∪ {(∞, −)}
+
+(b, π2 ) ∈ Φ ∪ {(∞, −)}
+
+Φ; ∆; ◦∗ → ∗ `SCT R ≤π R0 ⇒ C
+
+Φ; ∆; ∗ `SCT ν a R ≤π ν b R0 ⇒ a ≤max(π1 ,π2 )π b, C
+The rest of the rules are nearly identical translation of the rules for comparison of
+types in System Fωcop, SCT .
+K∈∆
+Φ; ∆; ι `SCT K ≤π K ⇒ ·
+
+Φ; ∆, X : ι1 ; ι2 `SCT (F @ X) ≤π (F 0 @ X) ⇒ C
+Φ; ∆; πι1 → ι2 `SCT F ≤π F 0 ⇒ C
+
+Φ; ∆; ∗ → ∗ `SCT Sc ≤π Sc0 ⇒ Cc for all c ∈ S
+Φ; ∆; ∗ → ∗ `SCT S ≤π S 0 ⇒
+
+S
+
+c∈S
+
+Cc
+
+Φ; ∆; ∗ → ∗ `SCT Rd ≤π Rd0 ⇒ Cd for all d ∈ R
+Φ; ∆; ∗ → ∗ `SCT R ≤π R0 ⇒
+
+6.3.4
+
+S
+
+d∈R
+
+Cd
+
+Properties
+
+The next technical lemma captures the position of size variables occurring in a
+certain way in a type.
+Theorem 10 (Polarities in type comparison). Assume a polarity π, a System Fωcop, SCT
+types A and C. Also assume a set of flexible variables Φ, a kinding context ∆ and
+a kind ι. We also fix a size variable (i, π 0 ) ∈ Φ, occurring in C with a fixed polarity
+π 00 , where π 00 ∈ {+, −}. We also require that Φ was generated during the call-site
+inference process, i.e. size variables that were generated for greatest fixpoints have
+52
+
+6. Inference
+polarities either − or ◦, and variables generated for the least fixpoints have polarities
++ or ◦.
+If Φ; ∆; ι `SCT A ≤π C ⇒ C, then all generated constraints in C involving i are of
+0 00
+the form (j ≤ππ π i).
+Proof. The proof proceeds by induction on the structure of the comparison judgment.
+1. We consider the rule of application of a type operator F G and F 0 G0 . If i
+occurs in F 0 , then the claim from comparison of type operators completes by
+induction.
+Assume F 0 : π1 ι1 → ι2 . An important observation here is that if i occurs in
+raw G with polarity π2 , then π 00 = π1 π2 : if π1 = −, then then the occurrence
+is inverted, and if π1 = +, then the polarity of occurrence is preserved. The
+0
+application of induction principle yields constraints of the form (j ≤π1 ππ π2 i),
+0
+00
+which is equal to (j ≤ππ π i). This proves the induction claim.
+2. We consider a rule of comparison of least fixpoints. The case of comparison of
+the definitions of fixpoints is handled by the induction hypothesis.
+Now we look at the case of µb S 0 where b = i. The polarity π 00 must be +
+here, as the fixpoints are mentioned directly. Since we are comparing the least
+fixpoints, the associated polarity π 0 to i is +. max(π1 , +) = + for π1 ∈ {◦, +}
+(π1 cannot be − because π1 is associated with a least fixpoint), hence we get
+that the generated constraint is of form a ≤π i, which is what we need to
+show.
+3. We consider a rule of comparison of greatest fixpoints. This is similar to
+the previous case, and the claim for variant definitions holds by induction
+hypothesis.
+Now we look at the case of µb R0 where b = i. The polarity π 00 must be
++ here. The associated polarity π 0 is −, because this is the least fixpoint.
+max(π1 , −) = − for π1 ∈ {◦, −}, so we get the generated constraint of the
+form a ≤−π i, which is what we needed to show.
+4. The rest of the cases do not explicitly generate constraints nor they change
+the polarities of comparison, so they can be handled similarly.
+
+The next lemma states that in the constraint graph, there is no edge (i < j) where i
+is flexible and j is rigid, which means that all rigid variables are the ”leaves” of the
+constraint graph. This is an important property of our inference algorithm, which
+would later imply its soundness.
+Theorem 11 (Nature of rigid variables). Assume the following:
+• Let π be either + or −;
+53
+
+6. Inference
+• X is a set of size variables i1 , . . . , in ;
+• Ψ ≡ {(i1 , π), . . . , (in , π), . . .};
+• Γ ≡ x1 : B1 , . . . , xm : Bm ;
+• ∆ is a type context;
+• t is a term in System Fωc ;
+• A is a System Fωcop, SCT type;
+Additionally, we assume the following constraints on each size variable i ∈ X:
+1. For every (x : Bk ) ∈ Γ, either i ∈π Bk , or i does not occur in Bk at all;
+2. i ∈−π A, or i does not occur in A at all;
+3. If π = +, then all occurrences of i belong to the least fixpoints, otherwise all
+occurrences of i belong to greatest fixpoints.
+If either:
+• t is type-checked with an inference rule, i.e., Ψ; Γ; ∆ `SCT t ⇒ C; Φ; C; T; t0 ;
+• t is type-checked with a checking rule, i.e., Ψ; Γ; ∆|A `SCT t ⇒ Φ; C; T; t0
+Then for every i ∈ X, there is no j ∈ Φ such that (j R i) ∈ C. Additionally, in case
+of the inference rule, every i ∈ X either occurs in C with polarity π, or does not
+occur in C at all.
+Proof. The proof proceeds on induction on the structure of type-checking judgments
+of the term, so it is a double induction on checking and inference rules.
+First, we handle the checked type, i.e., prove the claim for variables occurring with
+polarity −π in A.
+• The rule for checking () does not generate constraints;
+• The rule for checking a generalized lambda holds by induction hypothesis;
+• The rule for checking a tuple holds by the induction hypotheses, since product type A1 × A2 is covariant in both its components, which means that the
+polarities of sizes occurring in A1 and A2 do not change;
+• The rule of checking least fixpoint µa S utilizes the restriction on size variables
+in X. If π = +, then the analyzed variables in µa S must occur negatively
+in the checked type. This is not the case, because in µa S the occurrence is
+positive, hence the constraint generated by this rule cannot have (j R a) where
+a ∈ X. If π = −, then the analyzed variables belong to the greatest fixpoints
+ν, hence a 6∈ X;
+• The rule of checking a generalized lambda does not produce constraints with
+a size variable from X as an upper bound because of introduced trivialization.
+54
+
+6. Inference
+• The rule of checking the existential quantifier does not change polarities in F ,
+so the claim for this rule holds by the induction hypothesis.
+• The rule of transition from inference to checking can be proved by Theorem 10:
+here our starting polarity is +, the occurrences are with polarity −π, and the
+associated polarities with variables in X are π. It means that the generated
+constraints for variables are (j ≤+−ππ i) = (i ≤ j). This fulfills the claim of
+the theorem.
+It also worth noting that the premise with inferred type confirms the claim of
+the theorem by the induction hypothesis.
+Next, we handle the case of inferred type. Here we focus on size variables occurring
+in the types of the term context.
+• The case of variable directly confirms the claim: all analyzed variables occur
+positively in the inferred type.
+• For the case of function application t s : A → B, we first use the induction
+hypothesis on t and get that all analyzed variables in A → B occur with
+polarity π. In particular, it means that all analyzed variables in A occur with
+polarity −π, which allows to apply the induction hypothesis for checking of s
+against A. From both these induction hypotheses we get that C1 and C2 both
+satisfy the theorem’s claim on constraints. Additionally, due to covariance of
+the arrow type, all analyzed variables in B occur with polarity π.
+• The rule of projection of a record type again requires analysis on the type
+of fixpoints that was used for the analyzed variables. If the polarity is −, it
+means that the fixpoint operator is ν. But in ν a R, a occurs positively, which
+means that a cannot be an analyzed variable. If the polarity is +, then a 6∈ X
+because the analyzed variables correspond to µ.
+• The rule of application of a type does not change polarities in F , hence this
+part holds by induction hypothesis.
+• The rule of type ascription does not generate new constraints, and all size
+variables in A0 are fresh, hence this part holds by the induction hypothesis.
+
+Finally, we glue everything together.
+Theorem 12 (Rigid variables in constraints). Consider a System Fωc type A and a
+pattern spine {⃗q → t}.
+If
+• A0 is a size-encoded version of A, i.e., +; ∆0 `SCT A ⇒ Ψ1 ; A0 ;
+• A00 is obtained after copattern-elimination of A0 , and Ψ1 , Ψ2 is a set of rigid
+variables, i.e., ∆0 , Ψ1 `SCT q⃗ : A0 ⇒ A00 ; Γ; ∆; Ψ2 ; q⃗0 ;
+55
+
+6. Inference
+• C is a set of constraints obtained after checking clause body and Φ is a set of
+all collected flexible variables during this process, i.e., Ψ1 , Ψ2 ; Γ; ∆|A `SCT t ⇒
+Φ; C; T; t0
+Then there is no i ∈ Φ and j ∈ Ψ1 , Ψ2 such that (i R j) ∈ C.
+Proof. Due to Lemma 5, we get that the rigid variables can be split into three
+groups:
+• The variables corresponding to µ, which occur negatively in A00 and positively
+in Bk . This group corresponds to the premise of Theorem 11 with polarity +,
+which means that the theorem holds for this group.
+• The variables corresponding to ν, which occur positively in A00 and negatively
+in Bk . This group corresponds to the premise of Theorem 11 with polarity −,
+which means that the theorem holds for this group.
+• The variables that do not occur anywhere in the context or the expected type.
+It means that there will be no constraints involving these variables, hence the
+theorem’s claim holds for them.
+
+6.4
+
+Constraint Solving
+
+A set of flexible variables and a set of constraints describe the behavior of data flow
+in the program. To ensure strong normalization, we need to assign each flexible
+variable to some rigid one, which would imply that the annotated program is an
+instance of System Fωcop, SCT .
+For a set of rigid variables Ψ, we define a flexible substitution φ : Φ → {a | Ψ ` a}.
+Informally, this is a mapping from flexible variables Φ to a set of size expressions
+that are generated by rigid size context Ψ. We write Ψ; C ` φ to indicate that φ is
+coherent, namely ∀(i R j) ∈ C. Ψ ` φ(i) R φ(j)↑ .
+We extend the domain of φ to terms of System Fωcop, SCT functorially, denoting φ(t)
+as a term obtained after the application of φ to all flexible size variables occurring
+in t.
+The next theorem claims that a coherent substitution for the constraints gathered
+according to section 6.3 leads to a well-typed (hence strongly normalizing) term in
+System Fωcop, SCT .
+Theorem 13 (Soundness of coherent substitutions). Assume a function symbol f ,
+a System Fωc type A, a set of functions Σ, a mutual block Ξ where f ∈ Ξ, a pattern
+spine {⃗q → t}, and a set of invocation graphs G.
+If
+1. A0 is an encoded version of A, i.e., +; ∆0 `SCT A ⇒ Ψ1 ; A0 ;
+56
+
+6. Inference
+2. C is an eliminated type after copattern-matching of q 0 , and Ψ2 is an obtained
+set of rigid variables, i.e., ∆0 `SCT q⃗ : A0 ⇒ C; Γ; ∆; Ψ2 ; q 0 ;
+3. C is a set of gathered constraints, and Φ is a set of flexible variables, i.e.,
+Ψ1 , Ψ2 ; Γ; ∆|C `SCT t ⇒ Φ; C; T; t0 ;
+4. There is a flexible substitution defined on Φ, i.e., φ : Φ\Ψ → { a | Ψ1 , Ψ2 ` a};
+5. The flexible substitution defined previously is coherent with respect to the constraints, i.e., Ψ; C ` φ;
+6. For every usage of g ⃗a where g ∈ Ξ in t0 , there is G ∈ G(f, g) such that
+−−→
+φ(a) ≺G Ψ1 .
+Then Σ; Ξ; G; Ψ1 ; ∆; Γ ` φ(t0 ) ⇔ C.
+Proof. The algorithm of gathering constraints repeats the type-checking process in
+System Fωcop, SCT . We shall note that the gathered constraints resemble the actual
+inequalities that are checked during subtyping and constructor/destructor application, so any substitution that respects the constraints will also lead to successful
+type-checking of System Fωcop, SCT .
+We define an operation of closest next bound search Ψ ` R a ⇒ b where R ∈ {<, ≤}
+that computes the closest size expression that relates to a. For example,
+(i : <∞), (j : <i) ` < j ⇒ i
+But
+(i : <∞), (j : <i) ` < i ⇒ ∞
+Note that it extends for minima:
+(i : <∞), (j : <i), (k : ≤∞), (l : ≤∞), (m : <l) ` < (j ∧ k ∧ m) ⇒ (i ∧ l)
+The rule is formally defined by the following universal property: Ψ ` R a ⇒ b if
+∀c. Ψ ` a R c↑ =⇒ Ψ ` b ≤ c.
+We define an operation of least upper bound Ψ ` LUB(a1 , a2 ) ⇒ b by the following
+rule: Ψ ` LUB(a1 , a2 ) ⇒ b if ∀c. Ψ ` a1 ≤ c, Ψ ` a2 ≤ c =⇒ Ψ ` b ≤ c. This
+binary operation generalizes to n-ary one. For n = 0, LUB returns ∞.
+Now we are ready to present the algorithm of computing the optimal coherent substitution.
+• Input: a set of constraints C, a set of non-recursive flexible variables T and a
+set of rigid variables Ψ.
+• Output: a flexible substitution φ.
+Algorithm 1 (Solving of the constraint graph). The set C is interpreted as a graph
+where the variables act as vertices, and relations act as edges.
+1. Find strongly connected components in the graph C. Proceed in topological
+order. Let the current component be {i1 , i2 , . . . , in };
+57
+
+6. Inference
+2. Assign ∞ to those components which contain an edge marked with < internally;
+3. Assign
+
+V
+i∈Ψ
+
+i to the components where any variable belongs to T;
+
+4. Consider a set of size expressions {a1 , a2 , . . . , am } such that (ak R ip ) ∈ C
+for all k ∈ [1 . . . m] and p ∈ [1 . . . n]. Let Ψ ` R φ(ak ) ⇒ bk . Let Ψ `
+LUB(b1 , . . . , bm ) ⇒ c;
+5. Assign φ(i1 ) = φ(i2 ) = . . . = φ(in ) = c.
+We shall note that Algorithm 1 is well-formed, i.e., φ is called only on those flexible
+variables that were assigned on the previous stage, due to the topological ordering.
+From this moment we shall denote the substitution built by the algorithm as φ∗ .
+The next theorem shows that Algorithm 1 generates a coherent substitution with
+respect to the constraint graph.
+Theorem 14 (Soundness of φ∗ ). Assume the conditions of Theorem 12. If φ∗ was
+built for Ψ, C and T, then Ψ; C ` φ∗ .
+Proof. The substitution respects all lower bounds by construction. We only need to
+show that there is no upper bound of a flexible variable that may not be respected
+by the algorithm.
+Since there is a topological ordering on variables, this problem may arise only for
+variables for which there is no upper bound in the condensed graph. The algorithm
+processes all flexible variables, which means, if the bound is present, then it is a
+rigid variable or infinity. However, the infinity as an upper bound is respected by
+any substitution, and rigid variables cannot have lower bounds by Theorem 12.
+Corollary (Correctness of the algorithm). Algorithm 1 produces a correctly-typed
+term in System Fωcop, SCT
+Proof. Follows from Theorem 13 and Theorem 14.
+We also would like to comment on the completeness of Algorithm 1. A reasonable
+formulation of completeness would be the fact that all other coherent substitutions
+φ do not behave better than φ∗ . It is clear from the coherence of φ that it should
+agree on components, so we can consider only the graph of connected components
+in our analysis. An important observation is that there may be components without
+any lower bound, for which φ actually may infer better results than φ∗ . However,
+we conjecture that this situation is unusual: our goal is to construct a certificate of
+termination, i.e. to show that the ”size” of some pattern-matched variable can be
+tracked up to a recursive call. By Theorem 12, the rigid variables themselves act
+as components without lower bounds, so it is reasonable to assume that we cannot
+deduce anything meaningful for components that do not have this evidence of a rigid
+variable. We consider an option that there may be a better algorithm in the future
+that solves this problem and possesses completeness.
+58
+
+6. Inference
+Summing up, there is no better assignment than what we do in the constructed
+substitution. It means that our algorithm finds the best possible assignment to
+compute recursive calls, and it has a complexity of O(n), where n is the number of
+all size variables, asymptotically equal to the size of the term.
+
+6.5
+
+Termination Checking of Definitions
+
+Here we shall present the complete algorithm of checking a mutual block of functions
+for termination.
+Algorithm 2 (The Type-Based Termination Checker). Assume that we have a
+mutual block Ξ in System Fω .
+⃗ ∈ Ξ;
+1. Iterate over definitions in (f : A = D)
+2. Encode the type of f , i.e. +; · `SCT A ⇒ Ψ; A0 ;
+⃗
+3. Iterate over clauses {⃗q → t} ∈ D;
+4. Pattern-match the pattern spine q⃗ to obtain a set of rigid variables, i.e. q⃗ `SCT Ψ :
+A0 ⇒ A00 ; Γ; ∆; Ψ0 ; _. The clause-local set of rigid variables is Ψ, Ψ0 .
+5. Collect constrants from the clause body, i.e. Ψ, Ψ0 ; Γ; Ψ, ∆|A00 `SCT t ⇒ Φ; C; T; t0 .
+6. Compute flexible substitution Ψ, Ψ0 ; C ` φ∗ .
+7. Given a size-annotated term φ∗ (t), compute a set of invocation graphs Gf,D
+for all usages of g ∈ Ξ within φ∗ (t).
+8. Compute a union of all Gf :=
+9. Compute a union of all G :=
+
+S
+D∈ ⃗
+D
+
+S
+
+f ∈Ξ
+
+Gf,D .
+
+Gf .
+
+10. Accept the mutual-recursive block Ξ as a set of terminating functions if ` G.
+Theorem 15 (Soundness of termination checking). Consider a mutual-recursive
+block Ξ. If Algorithm 2 accepts it, then Ξ comprises strongly-normalizing functions.
+Proof. Let Ξ be a mutually-recursive block, let G be a set of invocation graphs
+computed by the algorithm of termination checking, where ` G.
+Consider each clause in each definition in Ξ. By Theorem 14 we know that each φ∗ is
+coherent with respect to the clause-local constraints, which implies by Theorem 13
+and ` G that each definition can be type-checked as a term in System Fωcop, SCT . By
+Theorem 4 we know that the block is strongly normalizing.
+The problem of deciding whether a set of functions accepted by the algorithm above
+is PSPACE-hard is well-established in the literature [Jones et al., 2001]. The reason
+for this complexity is step 10, which requires processing a possibly large number
+of graphs. This is the price for being free from requiring the exact ordering on
+pattern-matching arguments.
+59
+
+6. Inference
+However, we should claim that the algorithm for termination checking provided
+here is quite practical. Although formally the problem is PSPACE-hard, the sets
+of invocation graphs in practice are often relatively small, which allows using them
+for mature languages. As of the moment of writing, Agda, Idris, and Arend use
+this method, and they do not experience major problems with the performance of
+their termination checker. On the other hand, the rest of the steps in the algorithm
+are linear in the size of the program, which implies that they are acceptable from a
+practical point of view.
+
+6.6
+
+Non-triviality
+
+So far, the approach presented here solves a rather artificial problem. Given a
+program in System Fω with copatterns, the algorithm allows to infer some size
+arguments depending on the syntax of the program, and then according to a criterion
+that depends on the inserted sizes we make claim that the program terminates or not.
+It is probable that our process does not allow to prove termination for any function,
+since there is no guarantee that a function would not be rejected by the ` G method.
+Therefore, in the absence of completeness, we need a baseline, that would indicate
+that the set of strongly normalizing functions accepted by Algorithm 2 is not empty.
+We show that our algorithm accepts primitive-recursive functions. We need to express the higher-order operator ρ : ∀A. A → (N → A → A) → (N → A), where
+ρ g h Z −→ g and ρ g h (S x) −→ h x (ρ g h x). Given the rewrite rules, the
+definition is quite straightforward.
+ρ : ∀A. A → (N → A → A) → (N → A)
+= { A g h Z
+→ g
+; A g h (S x) → h x (ρ g h x)
+}
+
+Now in order to show the acceptance of this function, we shall apply the algorithm
+of termination checking to it. First, according to the annotation process, the type
+of ρ is ∀(i : <∞). ∀A. A → (N∞ → A → A) → Ni → N∞ . Next, after the
+patter-matching and insertion of flexible variable, the definition has the following
+representation:
+ρ : ∀(i : <∞). ∀A. A → (N∞ → A → A) → (Ni → A)
+= { i A g h (Z i1 )
+→ g
+; i A g h (S i2 x) → h x (ρ j1 g h x)
+}
+
+We are interested in the second clause because it contains a recursive call. The rigid
+context here is Ψ ≡ (i2 : <i), and the set of constraints is C ≡ (i2 ≤ j1 ) with the
+flexible substitution φ∗ := j1 7→ i2 . Since there is only one size variable in the type
+60
+
+6. Inference
+<
+
+1
+
+2
+
+Figure 4: Representation of an invocation graph
+of ρ, there is a single invocation graph consisting of two vertices connected by the
+edge <, as shown in Figure 4.
+This graph is accepted by the criterion ` G, hence ρ is accepted by the checker. As
+a result, we can express all primitive-recursive functions in our calculus.
+Similarly, we will show that our termination checker can emulate guardedness condition.
+zeros : Stream N
+= { .head →
+; .tail →
+}
+
+Z
+zeros
+
+An annotated version of this definition has the following representation:
+zeros : ∀(i : <∞). Streami N∞
+= { i .head i1 → Z
+; i .tail i2 → zeros j1
+}
+For the second clause, the set of rigid variables is Ψ ≡ (i2 : <i), and the set of
+constraints is C ≡ (i2 ≤ j1 ) with the flexible substitution φ∗ := {j1 7→ i2 }. Similar
+to ρ, the resulting invocation graph satisfies the criterion ` G, indicating that this
+definition is accepted.
+Describing the class of accepted definitions remains an open question.
+
+6.7
+
+Size Preservation
+
+Another useful application of inference is size preservation, which is the ability to
+infer dependencies between size variables. Consider the following definition:
+minus: N → N → N
+=
+{ Z
+Z
+; Sx Z
+; Sx Sy
+}
+
+→
+→
+→
+
+Z
+Sx
+minus x y
+
+This function passes the termination check defined by the application of the algorithm. During the work of the algorithm, the inferred type of a function would be
+61
+
+6. Inference
+Ni → Nj → N∞ , which is reasonable. However, we can do more here: a close look at
+the behavior of the function minus results in the observation that it never returns a
+value bigger than its first argument. In other words, minus is size-preserving in its
+first argument.
+This observation can be dualized to the case of coinduction.
+id: Stream N → Stream N
+=
+{ s .head → s .head
+; s .tail → id (s .tail)
+}
+Here we can notice that the function produces n elements of the output while it
+consumes the same n elements of the input. In other words, id is size-preserving in
+its input.
+Our key observation here is that we have to keep independent sizes that are controlled by the user, and we are trying to find if the result of the computation can
+depend on these user-controlled sizes. Formally, positive occurrences of fixpoints
+may depend on the negative positions of other fixpoints in the type signature.
+Our approach to testing size preservation is rather naïve: given a set of constraints,
+we are attempting to replace every positive size variable with every negative size
+variable, and then check that the constraints still behave well.
+We shall sketch the algorithm using the example of the following function:
+f: N → N → N × N
+= { Z
+y → (Z, S y)
+; (S x) y → f x y
+}
+Our first step is the modification of the signature of the recursive function. Usually,
+the process starts with encoding the type of function f as Ni → Nj → N∞ × N∞ .
+However, here we relax the restrictions on the positive occurrences: we allow one
+positive occurrence to have a size variable. For this example, we shall try to check
+whether it is possible to identify this the left part of the codomain product type
+with i. After this change, f would have the type Ni → Nj → Ni × N∞ .
+The next step is the type-checking of the term with the modified signature. We
+shall refer to the set of gathered constraints as CM . For example, the annotated
+definition of f may have the following representation:
+f: ∀(i : <∞). ∀(j : <∞). Ni → Nj → Ni × N∞
+= { i j (Z i1 )
+y → (Z l1 , S l2 y)
+; i j (S i2 x) y → f l3 l4 x y
+}
+62
+
+6. Inference
+Where C = {(i1 ∧ j ≤ l1 ) , (l1 ≤ i), (j < l2 ), (l2 ≤ ∞), (i2 ≤ l3 ), (l3 ≤ i), (j ≤
+l4 ), (l4 ≤ ∞)}. According to the algorithm, we can generate a suitable substitution
+φ∗ ≡ l1 7→ (i1 ∧ j), l2 7→ ∞, l3 7→ i2 , l4 7→ j. It’s important to note that this substitution is coherent with respect to C, signifying that the signature Ni → Nj → Ni × N∞
+is valid for f.
+Now, let’s examine what happens if we attempt to identify the second argument
+of the function Nj with the right component of the codomain pair, i.e., to have a
+signature Ni → Nj → N∞ × Nj . The annotated term appears the same as described
+above, but the set of constraints would be different. We have C = {(i1 ∧ j ≤
+l1 ), (l1 ≤ ∞), (j < l2 ), (l2 ≤ j), (i2 ≤ l3 ), (l3 ≤ ∞), (j ≤ l4 ), (l4 ≤ j)}. It’s worth
+noting that due to the constraints (j < l2 ), (l2 ≤ j), we cannot find an assignment
+for l2 such that the resulting substitution would be coherent. The reason is that f
+does not preserve the size of the second parameter in its second component of the
+output; hence, we have to leave ∞ there.
+A similar issue may arise if we try to identify the second argument Nj with the left
+component of the codomain pair, i.e., to have a signature Ni → Nj → Nj × N∞ .
+The set of constraints here is C = {(i1 ∧ j ≤ l1 ), (l1 ≤ j), (j < l2 ), (l2 ≤ ∞), (i2 ≤
+l3 ), (l3 ≤ j), (j ≤ l4 ), (l4 ≤ ∞)}. Due to constraints (i2 ≤ l3 ), (l3 ≤ j), we cannot
+find a suitable expression for l3 such that any flexible substitution would be coherent.
+Indeed, the left component of the pair is not related to the second argument, and
+it is reflected in the constraint graph as an attempt to relate two independent size
+variables.
+We can make an observation that two variables may be identified whenever the
+constraint graph permits a coherent substitution. More precisely, the erroneous
+cases shown above violate the result of Theorem 12. This is not surprising: our
+main precondition is that the input variables remain independent of each other,
+which is the result of Theorem 12.
+We will now formalize the observation made above. A set of constraints C is safe
+if ∃φ. Ψ; C ` φ. This can be checked, for example, by computing φ∗ and then
+verifying whether it is coherent with respect to C. It’s important to note that
+the process of computing φ∗ remains well-formed in this case. The original graph
+permits the computation of φ∗ , and the modified graph simply contains more edges,
+possibly increasing the number of strongly connected components, but not changing
+the topological ordering.
+Size preservation analysis is a promising direction of improvement for a type-based
+termination checker. We intentionally provide here a simple approach with the
+possibility of future improvement, both from a quality and performance point of
+view.
+
+63
+
+6. Inference
+
+64
+
+7
+Implementation
+In this chapter we will reflect on the practical implementation of Algorithm 2.
+
+7.1
+
+Architecture
+
+The actual implementation of the termination checker undergoes refactoring and
+constant improvements. Therefore, we will overview the design choices made during
+the development of the algorithm rather than focusing on specific code snippets.
+Before discussing the details, we need to explain the architecture of the language
+for which we are designing our algorithm. Proof assistants are a special kind of
+programming language, where the syntax serves as the central means of interaction
+with the user. The syntax is often layered, with the following main components:
+1. Concrete syntax, which reflects the exact input of the user, and it is intended
+to be concise and user-readable;
+2. Abstract syntax, which is obtained after the parsing and desugaring the concrete syntax. Abstract syntax is organized as a set of data structures in the
+host language, and is more convenient for processing by other syntax-related
+algorithm.
+3. Internal syntax, which is obtained after the type-checking the abstract syntax.
+It may be diﬀicult to comprehend due to extreme verbosity, but it offers the
+biggest amount of information for the language-targeted algorithms.
+For our project, the principle choice in the implementation is to develop a separate
+type system for the internal syntax. This approach has numerous advantages:
+1. A separate type system is decoupled from the main type system, which allows
+separate evolution of the underlying theories. It is especially valuable for our
+project, since we are targeting dependently-typed language with a System
+Fω -based type system;
+2. The isolation from other language features allows to limit possible side-effects
+on the main language, and also to make the algorithm easily replaceable;
+3. A separate type system makes the proposed termination checker non-infective,
+which is not the case with the existing implementation of sized types. Non65
+
+7. Implementation
+infectiveness allows to regulate the portion of definitions that are covered by
+the proposed termination checker without affecting the entire code base.
+While this approach offers significant power and flexibility, it comes with some
+disadvantages. Firstly, the complexity of implementation is increased due to the
+introduction of a new type system. Modeling System Fω requires the development
+of custom mechanisms for substitution and pattern-matching, which can be expensive to maintain over time. Additionally, there is a certain level of duplication of
+concepts, as existing mechanisms may need to be replicated or adapted to fit the
+new type system.
+The algorithm closely follows the process outlined in chapter 6, which involves bidirectional type-checking against the new type system. Encoded types are stored
+alongside definitions to ensure easy accessibility for further checks and analysis.
+Since our language is based on System Fω , our types include second-order parameterization. To represent this, we’ve opted for De Bruijn indexes, which allow us
+to avoid keeping track of the names of second-order variables. On the other hand,
+first-order size variables are global, as they later participate in the graph processing
+procedure.
+In Agda, the terms of internal syntax are β-normal, meaning that the bidirectional
+type-checking process can proceed without requiring explicit type ascriptions. This
+is advantageous for our project, as type ascriptions are often an element of abstract
+syntax that is not preserved further. Consequently, we need to infer the internal
+types of expressions and convert them later, which can be avoided by utilizing βnormal terms.
+Now we shall discuss invocation graphs. This component of the type-based checker
+already exists in the Agda code base and has proven itself to be quite practical over
+the years.
+Firstly, it’s worth noting that bipartite graphs are isomorphic to a compact version
+of adjacency matrices. The compactness arises from the fact that there cannot be
+edges between nodes in the same part, resulting in a matrix of size n1 · n2 , whereas
+a complete adjacency matrix would have size (n1 + n2 )2 .
+The elements of the matrix in this case can be taken from a semiring {0, 1, 2}, where:
+• 0 corresponds to an absence of an edge,
+• 1 corresponds to ≤,
+• 2 corresponds to <.
+The addition operation here is a maximum, and the multiplication is defined as:
+• 0 · x = 0,
+• 1 · x = x,
+• 2 · 2 = 2.
+It can be verified that this structure satisfies the definition of a semiring.
+66
+
+7. Implementation
+Now, we can observe that the composition of invocation graphs corresponds to
+matrix multiplication. We can interpret ` G as a check for idempotent matrices
+where there is a 2 on the diagonal in the set of matrices closed under multiplication.
+An important practical consideration is that in practice, the matrices contain a lot
+of 0 entries, so it makes sense to implement them in a sparse manner.
+
+7.2
+
+Alternative Approaches
+
+It was initially proposed to instrument the internal syntax of Agda with sizes during
+type-checking, aiming to automatically reuse the checking machinery. However,
+upon further consideration, this approach was found to be less straightforward than
+anticipated.
+Introducing sizes as direct elements of the syntax added complexity to the terms
+and increased the load on Agda’s internal algorithms. Sized types interfered with
+other features influencing internal syntax, such as experimental irrelevance.
+A concrete example highlighting the subtle issues with incorporating first-class sizes
+into the syntax can be illustrated with the following function:
+func : (a b : Nat) → Nat
+func a b = b
+If the parameter list annotates Nat with size, it’s required that this size is identical
+for both a and b. This introduces an accidental dependency between parameters,
+which is undesirable. To work around this, implementing complex branching logic
+would be necessary, potentially jeopardizing the safety of existing Agda features.
+Moreover, incorporating sized types essentially introduces subtyping to Agda’s theory of dependent types. Dependent type theory with subtyping is notably more
+complex and less performant, which could introduce sources of unsoundness in Agda.
+Ultimately, we concluded that maintaining this approach would be highly challenging and opted for a separate type system instead.
+
+7.3
+
+Existing Termination Checkers
+
+Algorithm 2 is not the termination checker, as various approaches exist for this
+problem. In the context of dependently-typed languages, common methods include
+[Abel, 2002] and [Jones et al., 2001]. Here, we’ll focus on Agda’s existing termination
+checker, which implements the Size-Change Termination Principle. This checker
+generates invocation graphs based on syntactic comparisons between the arguments
+of recursive calls and the parameters of the enclosing function. Inequalities can
+arise post pattern-matching, where bound variables are considered smaller than the
+matched parameter. This algorithm is referred to as the syntax-based termination
+checker.
+67
+
+7. Implementation
+It might be tempting to claim that our type-based checker is strictly stronger than
+the syntax-based one. Indeed, the intuition suggests that we also consider bound
+variables in patterns to have a strictly smaller size than the parameter. However,
+the existing syntax-based checker is slightly more powerful. Consider the following
+example:
+data List (A : Set) : Set where
+nil : List A
+cons : A → List A → List A
+f : {A : Set} → List (List A) → List A
+f nil = nil
+f (cons nil yss) = nil
+f (cons (cons x xs) yss) = f (cons xs yss)
+Note, that (cons xs yss) is not directly structurally smaller than (cons (cons x xs) yss).
+Here we experience a congruence closure of the syntactic sub-term relation. It is
+relatively easy to implement this extension in the syntax-based checker while it contradicts the philosophy of the type-based termination checker, hence this function
+will not pass Algorithm 2. Therefore, it makes sense to retain both termination
+checkers available.
+The key observation about our algorithm is that it aims to produce a termination
+certificate, which is a task very similar to what the current syntax-based checker does.
+As long as there exists a termination certificate for a function, it does not matter
+how it was obtained. In Agda, we made a choice to use both termination checkers
+on every definition. If either of them produces a valid termination certificate, then
+Agda marks the function as terminating.
+Regarding the ordering of invocation of the checkers, we decided to run the typebased checker first. The reasoning here is that for the feature of size preservation, the
+type-based checker needs to process all defined functions. Therefore, it makes little
+sense to schedule it after the syntax-based checker. From a performance point of
+view, there is an observation that the type-based checker is not asymptotically slower
+than the syntax-based checker. Thus, it would not introduce significant regressions
+in the type-checking process.
+
+7.4
+
+Performance
+
+As a result of our implementation, we measured the performance of the type-based
+termination checker on two major libraries: the standard library of Agda and graded
+modal type theory. All measurements were performed on a MacBook M2 Pro.
+The results of measuring on the standard library are displayed in Table 6. In the
+top part of the table, we show the measurement time for type-checking the standard
+library without our type-based termination checker. The bottom part shows the
+time measurement for various parts of the algorithm: ”call-site inference” refers to
+68
+
+7. Implementation
+bidirectional checking of terms and gathering constraints, ”constraint graph processing” refers to the process of finding the flexible substitution φ∗ , ”term encoding”
+refers to the conversion of internal Agda terms to sized types as per section 6.1,
+and ”matrix solving” corresponds to the application of the size-change termination
+method to compute ` G.
+Name of metric
+Total (syntax-based)
+Termination check (syntax-based)
+Total (type-based)
+Termination check (type-based)
+Call-site inference
+Constraint graph processing
+Term encoding
+Matrix solving
+
+Time
+256,765ms
+3,530ms
+275,005ms
+5,639ms
+2,735ms
+1,060ms
+1,035ms
+100ms
+
+Table 6: Performance metrics for type checking of the standard library
+The results of measurements on graded modal type theory are displayed in Table 7.
+One remark is that for graded modal type theory, we had to disable size preservation,
+as it is currently highly unoptimal for large terms. The type-based termination
+checker still has value even without size preservation.
+Name of metric
+Total (syntax-based)
+Termination check (syntax-based)
+Total (type-based)
+Termination check (type-based)
+Call-site inference
+Constraint graph processing
+Term encoding
+Matrix solving
+
+Time
+1,383,671ms
+31,342ms
+1,430,003ms
+33,408ms
+9,050ms
+8,385ms
+4,029ms
+12,595ms
+
+Table 7: Performance metrics for type checking of the standard library
+One conclusion we can make here is that the type-based checker is not much slower
+than the default termination checker of Agda. Given that the total time of type
+checking is magnitudes bigger than the termination check, it makes sense to consider
+our implementation of the type-based checker enabled by default. One obstacle to
+it is the implementation of size preservation, which is done very naively at the
+moment.
+
+69
+
+7. Implementation
+
+70
+
+8
+Related and Future Work
+8.1
+
+Related Work
+
+Our work combines the development of termination checkers, higher-order logic and
+sized types. Therefore, we shall discuss our contribution from all these points of
+view.
+Ultimately, a termination checker is an engineering component of modern proof
+assistants. The need in it is motivated by the fact that dependently-typed languages
+feature the definition of functions by pattern-matching. This mechanism serves the
+purpose of defining functions as a set of rewrite rules, which facilitates readability of
+programs. However, pattern matching diverges from the underlying theories, where
+recursion is usually accessed by the use of special functions, known as induction
+principles.
+1. In Arend [Isaev, 2023], as well as in Agda, the termination checker follows the
+syntax-based algorithm described in [Jones et al., 2001]. Our algorithm can
+utilize type information, thus allowing definitions that may not be accepted
+by the syntax-based checkers.
+2. In Rocq [Bertot and Castéran, 2013], the approach to recursive definitions
+closely aligns with theory. Every fixpoint type comes with a generated set of
+functions that represent induction principles for the defined type. Recursive
+calls are then desugared to the use of these functions. This means that the
+termination checker in Rocq cannot detect permutations of arguments, which
+is covered by the Size-Change principle.
+However, the termination checker in Rocq is able to unfold certain definitions,
+which means that some definitions can be accepted in Rocq, but not in Agda.
+Unnecessary unfolding may lead to performance issues with the type checking
+process, which is why it is discouraged in Agda.
+3. In Lean [The Lean Development Team, 2023], the termination checker is more
+heuristic in its nature. It attempts to guess the lexicographical order of patternmatching and then applies a syntax-based criterion to show that calls are made
+on smaller arguments.
+It is worth noting that Lean and Rocq have a way to specify termination measures,
+which are functions from arguments to some well-founded domain that are supposed
+71
+
+8. Related and Future Work
+to be decreasing for each recursive call. This technique extends the number of definitions that can be accepted by the language, but it comes at the cost of additional
+requirements to the user.
+The development of sized types has a rich history, but few of the theoretic models
+have reached production level. The most mature implementation of sized types is in
+Agda, where sizes act as a first-class element of syntax. They indeed help to certigy
+the termination of complex functions, and they are the recommended approach for
+coinductive functions. However, the existing sized types are very feature-heavy,
+which implies numerous problems.
+• The theory behind syntax-based sized types in Agda stipulates that not all
+size-annotated function types would behave well. Abel [Abel, 2006] requires
+that these types should be semi-continuous, but with the current size algebra
+of Agda, it leads to contradictions [Vandikas, 2022]. In contrast, our approach
+is based on a theory that does not impose limitations on annotated types. This
+is because the fixpoints in our approach are restricted from a polarity point of
+view, and termination is guarded by a graph-based measure, instead of relying
+on some globally defined criterion.
+• Sized types are infective, which makes them unusable locally. This is more
+of an architectural problem that does not exist in our approach. This issue
+is tightly coupled with the decision to make size annotations implicit for the
+user. However, we believe that starting from an implicit approach, we would
+eventually arrive at a non-invasive way to provide size annotations.
+• Sized types have too many features. For example, it is possible to express a
+maximum of two size expressions in Agda with the help of syntactic supremum
+t. While this is useful in theory, it leads to an exponential increase in time
+for processing the validity of size expressions. Our choice here is to start with
+a very simple size algebra (and we do not even have an explicit algebra, as
+there are no operations), and improve it based on our needs.
+Regarding the algorithm for inferring size annotations, it is important to mention
+the development by Barthe for the Calculus of Constructions [Barthe et al., 2006].
+Our algorithm addresses a similar goal but operates in O(n) time complexity instead
+of O(n3 ). However, our algorithm does not possess the property of completeness.
+We also acknowledge the work of Chan et al. [Chan and Bowman, 2019], which
+implements the same idea of implicit sized typing for Rocq. They build upon the
+development of Barthe and essentially implement their algorithm. One of the conclusions of their work is that sized types introduce unmanageable performance overhead,
+making them unfeasible for practical usage [Chan et al., 2023].
+We believe that there are two main reasons for the performance overhead of sized
+types, as observed in [Chan and Bowman, 2019]:
+• Complexity of Algorithms: [Chan and Bowman, 2019] also construct a
+graph of size constraints, where the edges can have negative weights. Their
+primary criterion for rejecting a definition is the presence of loops of nega72
+
+8. Related and Future Work
+tive weight, and they use the Bellman-Ford algorithm to check this condition.
+However, the Bellman-Ford algorithm has a time complexity of O(n3 ), which,
+as noted in the Performance section, makes it unusable for large graphs.
+• Size Preservation: [Chan and Bowman, 2019] employ the same approach
+as ours for size preservation, attempting to unify each size variable in the
+codomain with each variable in the domain. However, as previously noted, this
+approach can lead to considerable performance degradation. Additionally, it
+seems that in [Chan and Bowman, 2019], size preservation is not disableable.
+One may be interested whether the approach by [Chan et al., 2023] is more expressive
+than ours. We can confirm this observation: they use more expressive size algebra,
+which allows them to express arbitrary increases of sizes in the signature. Our
+approach does not allow it: to express increase of size variable i by n, we would
+need to add n additional size variables in the signature, and form a tower
+∀(i : <i1 ). ∀(i1 : <i2 ). . . . ∀(in : <∞). . . .
+where in denotes the n-increased i. We believe that there is rarely a need in complex
+size increasing, so we do not consider this limitation to be critical for adoption of
+the type-based termination checker. This observation also provides an intuition for
+why our constraint graphs can be processed faster than the ones in [Chan et al.,
+2023].
+We are aiming to solve the same problem that is stated in [Chan et al., 2023], but
+we argue that our experiments are more successful from the practical point of view.
+The main reason is that we can process the constraints in our simpler size algebra
+with greater speed, and we can reuse the mature size-change-termination matrix
+engine of Agda.
+
+8.2
+
+Future Work
+
+Our work opens up several avenues for further development, spanning both engineering and theoretical aspects.
+From a semantic perspective, a crucial direction is adapting the underlying theory
+from System Fω to handle dependent types effectively. Currently, our implementation cannot fully replace the syntax-based termination checker of Agda, particularly
+when dealing with dependent pattern matching. Exploring this area further could
+lead to a more comprehensive termination checker capable of handling a wider range
+of functions.
+Another important direction is defining the class of functions accepted by the termination checker. Some results have been achieved by [Ben-Amram, 2002], and further
+research could provide valuable insights into the characteristics of terminating functions.
+On the algorithmic front, a key question is whether it’s possible to design an algorithm for finding a flexible substitution that guarantees completeness. While the
+73
+
+8. Related and Future Work
+current implementation achieves optimal complexity, complete algorithms may impact performance negatively. It is also essential to investigate the limitations of the
+current approach and determine whether addressing the corner cases that prevent
+proving completeness for the current algorithm.
+Improving the eﬀiciency of size preservation is a significant area for improvement.
+Finding a more eﬀicient algorithm for detecting size-preserving functions could enhance the overall performance of the termination checker.
+From an engineering and architectural standpoint, there is potential in making size
+annotations more interactive. While our approach is powerful, it also has inherent limitations. For instance, expressing higher-order size preservation may not
+be inferable by our algorithm. Incorporating user-provided size annotations would
+necessitate rejecting function applications lacking correct size information, adding
+complexity to this idea. Further exploration in this area could lead to more flexible
+and user-friendly size annotation systems.
+
+74
+
+9
+Conclusion
+9.1
+
+Results
+
+In this work we described strongly-normalizing higher-order polymorphic lambda
+calculus and provided an algorithm for termination checking the definitions written
+in System Fω .
+More precisely, we have the following achievements:
+• We extend the work presented in [Abel and Pientka, 2016] by incorporating
+the size-change termination principle, while retaining the proof of strong normalization. This novel contribution enables the simultaneous use of sized
+types and the size-change termination principle, resulting in an expressive termination checker. Notably, the size-change termination principle eliminates
+a significant portion of the additional syntax that was previously required in
+[Abel and Pientka, 2016].
+• We present an algorithm for inference size annotations for a system similar
+to [Abel and Pientka, 2016]. The inference process scales linearly with the
+size of the syntax, rendering it practical for real-world applications. Although
+the size-change principle lifts the problem we are solving to PSPACE, the
+experience of using it in Agda shows that it behaves well in practice.
+• We implement the proposed termination checker for Agda and demonstrate
+its acceptable performance. This result proves that type-based termination
+checkers are feasible for mature dependently-typed languages. Our work also
+improves the treatment of coinductive definitions.
+
+9.2
+
+Discussion
+
+The work described in this thesis can be thought of as a new approach to think about
+sized types, thus extending [Abel and Pientka, 2016]. Sized typing is a powerful tool
+aiming to provide termination certificates, but its practical implementation always
+had various issues in real-world languages. Partly, it stems from the complexity of
+the lambda-calculus with subtyping. We managed to improve this theory further,
+making it more suitable for practical considerations.
+75
+
+9. Conclusion
+We also would like to note that our algorithm improves the usability of coinductive
+types. The existing guardedness checker is too weak for non-trivial development,
+and people usually resort to explicit sized types or guard modalities [Nakano, 2000].
+However, as we mentioned earlier, Agda’s sized types are infective, and guard modality requires clocks to unlock the interplay of coinductive data with induction. We
+believe that our approach, perhaps combined with explicit size annotations developed in the future, unlocks a new view on the application of sized types.
+Summing up, we are quite optimistic about the future of type-based termination in
+dependently typed languages. We believe that this work is a step towards performant
+and powerful implementation of termination checkers.
+
+76
+
+Bibliography
+Andreas Abel. foetus - termination checker for simple functional programs. 2002.
+URL https://api.semanticscholar.org/CorpusID:59868470.
+Andreas Abel. A Polymorphic Lambda-Calculus with Sized Higher-Order Types. PhD
+thesis, Ludwig-Maximilians-Universität München, 2006.
+Andreas Abel and Brigitte Pientka. Well-founded recursion with copatterns and
+sized types. Journal of Functional Programming, 26:e2, 2016. doi: 10.1017/
+S0956796816000022.
+Henk Barendregt. Introduction to generalized type systems. Journal of Functional
+Programming, 1(2):125–154, 1991. doi: 10.1017/S0956796800020025.
+Gilles Barthe, Benjamin Grégoire, and Fernando Pastawski. Practical inference
+for type-based termination in a polymorphic setting. In Typed Lambda Calculi
+and Applications: 7th International Conference, TLCA 2005, Nara, Japan, April
+21-23, 2005. Proceedings 7, pages 71–85. Springer, 2005.
+Gilles Barthe, Benjamin Grégoire, and Fernando Pastawski. Cic:̂ Type-based
+termination of recursive definitions in the calculus of inductive constructions.
+In Logic Programming and Automated Reasoning, 2006. URL https://api.
+semanticscholar.org/CorpusID:38601946.
+Amir M. Ben-Amram. General size-change termination and lexicographic descent,
+page 3–17. Springer-Verlag, Berlin, Heidelberg, 2002. ISBN 3540003266.
+Yves Bertot and Pierre Castéran. Interactive theorem proving and program development: Coq’Art: the calculus of inductive constructions. Springer Science &
+Business Media, 2013.
+Jonathan Chan and William J. Bowman. Practical sized typing for coq. CoRR,
+abs/1912.05601, 2019. URL http://arxiv.org/abs/1912.05601.
+Jonathan Chan, Yufeng Li, and William J. Bowman. Is sized typing for coq
+practical? Journal of Functional Programming, 33:e1, 2023. doi: 10.1017/
+S0956796822000120.
+Thierry Coquand. Infinite objects in type theory. In Proceedings of the International
+Workshop on Types for Proofs and Programs, TYPES ’93, page 62–78, Berlin,
+Heidelberg, 1994. Springer-Verlag. ISBN 3540580859.
+77
+
+Bibliography
+Jana Dunfield and Neel Krishnaswami. Bidirectional typing. ACM Comput. Surv.,
+54(5), may 2021. ISSN 0360-0300. doi: 10.1145/3450952. URL https://doi.
+org/10.1145/3450952.
+J. Y. Girard. W. w. tait. intensional interpretations of functionals of finite type i.
+the journal of symbolic logic, vol. 32 (1967), pp. 198–212. Journal of Symbolic
+Logic, 40(4):624–625, 1975. doi: 10.2307/2271837.
+Jean-Yves Girard. Une extension de Ľinterpretation de gödel a Ľanalyse, et son application a Ľelimination des coupures dans Ľanalyse et la theorie des types. In J.E.
+Fenstad, editor, Proceedings of the Second Scandinavian Logic Symposium, volume 63 of Studies in Logic and the Foundations of Mathematics, pages 63–92. Elsevier, 1971. doi: https://doi.org/10.1016/S0049-237X(08)70843-7. URL https:
+//www.sciencedirect.com/science/article/pii/S0049237X08708437.
+Jean-Yves Girard. Interpretation fonctionelle et elimination des coupures dans
+l’aritmetique d’ordre superieur. 1972. URL https://api.semanticscholar.
+org/CorpusID:117631778.
+John Hughes, Lars Pareto, and Amr Sabry. Proving the correctness of reactive systems using sized types. In Proceedings of the 23rd ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages, POPL ’96, page 410–423, New
+York, NY, USA, 1996. Association for Computing Machinery. ISBN 0897917693.
+doi: 10.1145/237721.240882. URL https://doi.org/10.1145/237721.240882.
+Valery Isaev.
+Arend.
+
+Arend, December 2023. URL https://github.com/JetBrains/
+
+Neil D. Jones, Chin Soon Lee, and Amir M. Ben-Amram. The size-change principle
+for program termination. In Proceedings of the 28th ACM SIGPLAN-SIGACT
+Symposium on Principles of Programming Languages, POPL ’01, page 81–92, New
+York, NY, USA, 2001. Association for Computing Machinery. ISBN 1581133367.
+doi: 10.1145/360204.360210. URL https://doi.org/10.1145/360204.360210.
+S. C. Kleene. Recursive predicates and quantifiers. Transactions of the American Mathematical Society, 53(1):41–73, 1943. ISSN 00029947. URL http:
+//www.jstor.org/stable/1990131.
+Simon Marlow et al. Haskell 2010 language report. Available online http://www.
+haskell. org/(May 2011), 2010.
+Hiroshi Nakano. A modality for recursion. In Proceedings of the 15th Annual IEEE
+Symposium on Logic in Computer Science, LICS ’00, page 255, USA, 2000. IEEE
+Computer Society. ISBN 0769507255.
+Ulf Norell. Towards a practical programming language based on dependent type
+theory. PhD thesis, Department of Computer Science and Engineering, Chalmers
+University of Technology, SE-412 96 Göteborg, Sweden, September 2007.
+F. P. Ramsey. On a problem of formal logic. Proceedings of the London Mathematical Society, s2-30(1):264–286, 1930. doi: https://doi.org/10.1112/plms/
+78
+
+Bibliography
+s2-30.1.264. URL https://londmathsoc.onlinelibrary.wiley.com/doi/abs/
+10.1112/plms/s2-30.1.264.
+John C. Reynolds. Towards a theory of type structure. In B. Robinet, editor, Programming Symposium, pages 408–425, Berlin, Heidelberg, 1974. Springer Berlin
+Heidelberg. ISBN 978-3-540-37819-8.
+Dana Scott. Data types as lattices. SIAM Journal on Computing, 5(3):522–587,
+1976. doi: 10.1137/0205037.
+W. W. Tait. Intensional interpretations of functionals of finite type i. The Journal
+of Symbolic Logic, 32(2):198–212, 1967. ISSN 00224812. URL http://www.jstor.
+org/stable/2271658.
+The Lean Development Team. The Lean reference manual. https://lean-lang.
+org/reference/, 2023.
+Alan Mathison Turing et al. On computable numbers, with an application to the
+entscheidungsproblem. J. of Math, 58(345-363):5, 1936.
+Anthony Vandikas. Proof of bottom with sized types, December 2022. URL https:
+//github.com/agda/agda/issues/6002.
+Philip Wadler. Theorems for free! In Proceedings of the Fourth International
+Conference on Functional Programming Languages and Computer Architecture,
+FPCA ’89, page 347–359, New York, NY, USA, 1989. Association for Computing
+Machinery. ISBN 0897913280. doi: 10.1145/99370.99404. URL https://doi.
+org/10.1145/99370.99404.
+David Wahlstedt. Dependent Type Theory with Parameterized First-Order Data
+Types and Well-Founded Recursion. Chalmers Tekniska Hogskola (Sweden), 2007.
+Kevin Watkins, Iliano Cervesato, Frank Pfenning, and David Walker. A concurrent logical framework i: Judgments and properties. Technical report, Technical
+Report CMU-CS-02-101, Department of Computer Science, Carnegie …, 2003.
+
+79
+
+Bibliography
+
+80
+
+A
+Appendix
+In this part we present the rules for System Fωc , which is a base system for which
+we apply Algorithm 2.
+The syntactic entities of this system are presented in Table 8.
+Pol
+3π
+Kind
+3 ι, ι0
+TyCtx 3 ∆
+
+::= ◦ | + | − | >
+::= ∗ | πκ → κ0
+::= · | ∆, X : πκ
+
+Polarity/variance
+Kind with variance
+Type variable context
+
+Table 8: Grammar description for kinds and sizes
+
+π < π 0 represents the rule for the lattice of polarities.
+π≤π
+
+◦≤π
+
+π≤>
+
+ππ 0 represents the rule for composition (commutative) of polarities.
+>π = >
+
+◦π = ◦ (π 6= >)
+
++π = π
+
+−− = +
+
+π −1 π represents the rule for inverse composition of polarities.
+>−1 π = ◦
+
+◦−1 ◦ = ◦
+
+◦−1 π = > (π 6= ◦)
+
++−1 π = π
+
+−−1 π = −π
+
+π∆ and π −1 ∆ extend the rules of composition to the typing context.
+π· = ·
+π −1 · = ·
+
+π(∆, X : π 0 ι) = (π∆), X : (ππ 0 )ι
+π −1 (∆, X : π 0 ι) = (π −1 ∆), X : (π −1 π 0 )ι
+
+∆ ` ι is a judgement of well-formedness of a kind.
+∆`∗
+
+−∆ ` ι ∆ ` ι0
+∆ ` πι → ι0
+
+The grammar for types and sizes is presented in Table 9
+I
+
+A. Appendix
+TyVar
+TyAtom
+Type
+Var
+Ctx
+Cons
+Proj
+Datatype
+Record
+
+3 X, Y, Z, i, j
+3K
+3 F, F 0 , A, B, C
+3 x, y, z
+3Γ
+3c
+3d
+3S
+3R
+
+::= X | 1 | × | → | ∀κ | ∃κ
+::= K | λX : ι. F | F F 0 | µS | νS
+::= · | Γ, x : A
+::= hc1 : F1 ; . . . ; cn : Fn i
+::= {d1 : F1 ; . . . ; dn : Fn }
+
+Type and size variables
+Type operators
+Type-level expressions
+Term variable
+Term variable context
+Constructor of datatype
+Field of record
+Datatype definition
+Record definition
+
+Table 9: Grammar description for type constructors
+
+∆ `Fω A ⇒ ι describes the rules for inference of a kind for a type.
+∆ `Fω 1 ⇒ ∗
+
+∆ `Fω × ⇒ +∗ → +∗ → ∗
+
+(X : πι) ∈ ∆
+∆ `F ω X ⇒ ι
+
+π≤+
+
+∆ `Fω → ⇒ −∗ → +∗ → ∗
+
+∆ `Fω F ⇒ πι → ι0
+
+π −1 ∆ `Fω G ⇔ ι
+
+∆ `Fω F G ⇒ ι0
+
+−∆ `Fω ι
+
+∆ `Fω ι
+
+∆ `Fω ∀ι ⇒ +(◦ι → ∗) → ∗
+
+∆ `Fω ∃ι ⇒ +(◦ι → ∗) → ∗
+
+∆ `Fω S ⇔ ◦∗ → ∗
+
+∆ `Fω R ⇔ ◦∗ → ∗
+
+∆ `Fω µS ⇒ ∗
+
+∆ `Fω νR ⇒ ∗
+
+∆ `Fω F ⇔ ι is a judgement about the checking of a kind for a type.
+∆ `Fω F ⇒ ι
+
+∆ `Fω ι ≤ ι0
+
+◦−1 ∆ `Fω ι
+
+∆ `Fω F ⇔ ι0
+
+∆, X : πι `Fω F ⇔ ι0
+
+∆ `Fω λX : ι. F ⇔ πι → ι0
+
+∆ `Fω Sc ⇔ ι for all c ∈ S
+
+∆ `Fω Rd ⇔ ι for all d ∈ R
+
+∆ `Fω S ⇔ ι
+
+∆ `Fω R ⇔ ι
+
+∆ `Fω ∆0 is a relation for well-formedness of a kinding context.
+∆ `Fω ·
+
+◦−1 ∆ `Fω ι
+
+∆, X : πι `Fω ∆0
+
+∆ `Fω X : πι, ∆0
+
+Given a well-formed kinding context, we can also define the well-formedness of variable context ∆ `Fω Γ :
+∆ `Fω ·
+
+∆ `Fω Γ
+
+∆ `Fω A
+
+∆ `Fω Γ, x : A
+
+The grammar for patterns is presented in Table 10.
+II
+
+A. Appendix
+Pat
+3 p ::= x | () | (p1 , p2 ) | c p | Q p
+Copat 3 q ::= p | X | .d
+PatSp 3 q ::= q⃗
+
+Pattern
+Copattern
+Pattern spine
+
+Table 10: Grammar description for patterns
+Formally, the relation ∆; Γ `Fω ∆0 p ⇔ A defines the rules of typing for pattern
+matching.
+·; x : A `Fω ∆0 x ⇔ A ·; · `Fω ∆0 () ⇔ 1
+∆1 ; Γ1 `Fω ∆0 p1 ⇔ A1
+∆2 ; Γ2 `Fω ∆0 p2 ⇔ A2
+∆1 , ∆2 ; Γ1 , Γ2 `Fω ∆0 (p1 , p2 ) ⇔ A1 × A2
+∆; Γ `Fω ∆0 p ⇔ Sc (µS)
+
+∆; Γ `Fω ∆0 ,X:κ p ⇔ F @κ X
+
+∆; Γ `Fω ∆0 c p ⇔ µS
+
+X : κ, ∆; Γ `Fω ∆0 X p ⇔ ∃κ F
+
+Here we define relation ∆; Γ|A `Fω ∆0 q⃗ ⇒ C .
+·; ·|C `Fω ∆0 · ⇒ C
+
+∆1 ; Γ1 `Fω ∆0 p ⇔ A
+
+∆2 ; Γ2 |B `Fω ∆0 q⃗ ⇒ C
+
+∆1 , ∆2 ; Γ1 , Γ2 |A → B `Fω ∆0 p q⃗ ⇒ C
+
+∆; Γ|Rd (νR) `Fω ∆0 q⃗ ⇒ C
+
+∆; Γ|F @κ X `Fω ∆0 ,X:κ q⃗ ⇒ C
+
+∆; Γ|νR `Fω ∆0 .d q⃗ ⇒ C
+
+X : κ, ∆; Γ|∀κ F `Fω ∆0 X q⃗ ⇒ C
+
+The syntactic entities that are used in the program are the presented in the Table 11.
+Exp
+Intro
+App
+Fun
+Elim
+
+3 r, s, t
+3v
+3u
+3 f, g
+3e
+
+⃗
+::= u | v | λD
+::= () | (t1 , t2 ) | c t | G t
+::= x | f | r e
+::= t | G | .d
+
+Term
+Introduction term
+Applicative term
+Function name
+Elimination
+
+Table 11: Grammar description for terms
+Σ; ∆; Γ `Fω r ⇒ C is a judgement about expression typing (inference mode).
+(x : A) ∈ Γ
+
+Σ; ∆; Γ `Fω r ⇒ νR
+
+Σ; ∆; Γ `Fω x ⇒ A
+
+Σ; ∆; Γ `Fω r.d ⇒ Rd (νR)
+
+Σ; ∆; Γ `Fω r ⇒ A → B
+
+Σ; ∆; Γ `Fω s ⇔ A
+
+Σ; ∆; Γ `Fω r s ⇒ B
+Σ; ∆; Γ `Fω r ⇒ ∀κ F
+∆ `Fω F 0 ⇔ κ
+Σ; ∆; Γ `Fω r F 0 ⇒ F @κ F 0
+∆ `Fω A
+
+Σ; ∆; Γ `Fω t ⇔ A
+
+Σ; ∆; Γ `Fω (t : A) ⇒ A
+
+(g : A) ∈ Σ
+Σ; ∆; Γ `Fω g ⇒ A
+III
+
+A. Appendix
+Σ; ∆; Γ `Fω r ⇔ C is a judgement describing the expression typing in checking
+mode.
+Σ; ∆; Γ `Fω t1 ⇔ A1
+Σ; ∆; Γ `Fω t2 ⇔ A2
+Σ; ∆; Γ `Fω () ⇔ 1
+Σ; ∆; Γ ` (t , t ) ⇔ A × A
+1
+
+Fω
+
+∆ `Fω F 0 ⇔ κ
+
+Σ; ∆; Γ `Fω t ⇔ Sc (µS)
+
+2
+
+1
+
+2
+
+Σ; ∆; Γ `Fω t ⇔ F @κ F 0
+0
+
+Σ; ∆; Γ `Fω c t ⇔ µS
+
+Σ; ∆; Γ `Fω F t ⇔ ∃κ F
+
+Σ; ∆; Γ `Fω Dk ⇔ A for all k
+
+Σ; ∆; Γ `Fω r ⇒ C
+
+Σ; ∆; Γ `Fω λ ⃗
+D⇔A
+
+Σ; ∆; Γ `Fω r ⇔ C
+
+The syntactic categories for definitions are presented in Table 12.
+DefCl
+Def
+Decl
+Block
+Prg
+Sig
+
+3D
+3 ⃗
+D
+3δ
+3Ξ
+3P
+3Σ
+
+::= {q → t}
+::= {D1 ; . . . ; Dn }
+::= f : A = ⃗
+D
+::= mutual ⃗δ
+::= ⃗Ξ; u
+::= ⃗δ
+
+Definition clause
+Definition clauses
+Declaration
+Mutual block
+Program
+Signature
+
+Table 12: Grammar description for definitions
+We define Σ; ∆; Γ `Fω D ⇔ A as a rule of checking a clause.
+∆0 ; Γ0 |A `Fω ∆ q⃗ ⇒ C
+
+Σ; ∆, ∆0 ; Γ, Γ0 `Fω t ⇔ C
+
+Σ; ∆; Γ `Fω {⃗q → t} ⇔ A
+⃗ ⇔A
+We can introduce the rule for checking a sequence of clauses Σ; ∆; Γ `Fω D
+Σ; ∆; Γ `Fω Dk ⇔ A for all k
+⃗ ⇔A
+Σ; ∆; Γ `Fω D
+Formally, the rule Σ; Ξ `Fω f
+following way:
+
+of checking a functional symbol is defined in the
+Σ; ·; · `Fω ⃗
+D⇔A
+⃗
+Σ; Ξ `Fω f : (A) = D
+
+Given the definitions above, we can introduce the rule Σ `Fω Ξ of typing of a block.
+⃗ for all f ∈ Ξ
+Σ; Ξ `Fω f : A = D
+Σ `Fω Ξ
+Similarly, we can define `Fω Σ – the typing of a set of signatures.
+`Fω ·
+IV
+
+`Fω Σ
+
+Σ `Fω Ξ
+
+`Fω Ξ Σ
+
+A. Appendix
+Finally, we are ready to wrap up and provide a rule for checking the whole program
+`Fω P .
+`Fω Σ
+
+Σ; ·; ·; ·; `Fω u ⇒ A
+`Fω Σ; u
+
+V
+
+
