@@ -59,8 +59,9 @@ We provide a complete, `0 sorry` Lean 4 formalization and soundness proof of **K
 │   │   ├── SCT/                             # Ultrafilter Infinite Ramsey & SCT well-foundedness proofs
 │   │   └── *.lean                           # V3 proofs, worked example, and DESIGN.md
 │   ├── Milestones/
-│   │   ├── Milestone1_1_AgdaBugBenchmarks.lean  # Mechanized Agda #3026 & #7178 benchmarks + V5 blocking proofs
-│   │   └── Milestone1_2_VerifiedElaboration.lean # Verified elaboration E(t), dual lowering, SCT WF lowering
+│   │   ├── Milestone1_1_AgdaBugBenchmarks.lean      # Mechanized Agda #3026 & #7178 benchmarks + V5 blocking proofs
+│   │   ├── Milestone1_2_VerifiedElaboration.lean    # Verified elaboration E(t), dual lowering, SCT WF lowering
+│   │   └── Milestone1_3_LargeSizesAndModularity.lean # Parametric large sizes vs. Choice (FSCD 2026) & modular SCT library checker
 │   ├── Stage1/
 │   │   └── MiniLeanSized.lean               # Executable bidirectional size-change checker + soundness + regression suite
 │   ├── Stage2/
@@ -93,13 +94,16 @@ At the end of [`Solutions/V5/Final.lean`](Solutions/V5/Final.lean), `#print axio
 
 ---
 
-### 3. Milestones 1.1 & 1.2: Agda Soundness Benchmarks & Verified Elaboration (`0 sorry`)
+### 3. Milestones 1.1, 1.2 & 1.3: Agda Soundness Benchmarks, Verified Elaboration & Parametric Large Sizes (`0 sorry`)
 - **[`Solutions/Milestones/Milestone1_1_AgdaBugBenchmarks.lean`](Solutions/Milestones/Milestone1_1_AgdaBugBenchmarks.lean) (Milestone 1.1)**:
   - **Class A (Agda Issue #3026 — $\infty < \infty$)**: Negative contradiction benchmarks (`agda3026_wf_contradiction`, `agda3026_bad_inductive_contradiction`), operational non-normalization (`agda3026_loop_not_sn`), and positive blocking theorems in `NishtAbel2024V5` (`v5_not_sizeLt_infty_infty`, `v5_sizeLtB_inf_self_false`, `v5_rejects_agda3026_self_instantiation`).
   - **Class B (Agda Issue #7178 — Mixed Inductive/Coinductive Positivity & Size Variance without $\infty < \infty$)**: Finite-size ($0 < 1$) negative contradiction benchmarks (`agda7178_finite_size_nonpos_subtyping_contradiction`, `agda7178_mutual_ind_coind_variance_contradiction`), positive blocking theorems in `NishtAbel2024V5` (`v5_rejects_negative_functor_at_pos_polarity`, `v5_encode_forbids_shared_mu_nu_size`), and positive acceptance of valid mixed blocks (`v5_accepts_valid_mixed_block`).
 - **[`Solutions/Milestones/Milestone1_2_VerifiedElaboration.lean`](Solutions/Milestones/Milestone1_2_VerifiedElaboration.lean) (Milestone 1.2)**:
   - **Verified Elaboration & Erasure Theorem (`elaborate_sound_and_coherent`)**: Translates size-checked derivations $\Gamma \vdash_{\text{sized}} t : A$ (including bounded course-of-values recursion `fixNat` and size-preserving `minus`) into standard, size-erased Lean 4 terms $\Gamma^\circ \to A^\circ$ and proves logical-relation coherence with the size-indexed semantics.
   - **Dual Lowering & Kernel `rfl` Reduction**: Proves semantic equivalence between `WellFounded.fix` lowering and spine-structural lowering (`divStructural_eq_divWF`, `mapRoseSized_erase_eq`), verifies kernel `rfl` reduction on concrete Euclidean division (`divErased_10_2_rfl`) and higher-order rose-tree traversals (`mapRose_rfl_benchmark`), and provides the general SCT mutual-block elaborator (`elaborateSCTBlock`, `elaborateSCTBlock_eq`) powered by `NishtAbel2024V5` Theorem 1 (`callRel_wf`).
+- **[`Solutions/Milestones/Milestone1_3_LargeSizesAndModularity.lean`](Solutions/Milestones/Milestone1_3_LargeSizesAndModularity.lean) (Milestone 1.3)**:
+  - **Parametric Large Sizes vs. `Classical.choice` (Laarakker, Otten & van den Berg, FSCD 2026)**: Formalizes relator-parametric inductive fixpoints (`LargeMu RF`, `fold_natural`, `fold_mkIn`) and stage-indexed parametric coinductive fixpoints (`StageNu F`, `ParamStageNu CF`, `unfold`). Proves both the negative interaction theorem (`choice_plus_prop_size_eq_synthesizes_size_inspector`, `unrestricted_choice_breaks_stage_coherence`) and the positive restriction theorem (`unsized_choice_commutes_with_erasure`, `v5_unsizedB_enforces_size_invariance`).
+  - **Modular Size-Change Summarization & Anti-Blowup Theorem (Abel & Nisht 2024 vs. Chan, Li & Bowman 2023)**: Implements the multi-module library checker `checkLibraryB`, proves global soundness (`checkLibraryB_sound`) and compositional separate compilation (`checkLibraryB_append`), proves the cubic complexity separation (`modular_le_global_cost`, `modular_strict_saving_two_blocks`, `uniform_library_quadratic_speedup`), and verifies a 3-module cross-calling library by kernel `rfl` (`test_modular_library_accepted`).
 
 ### 4. Stage 1: `MiniLean-Sized` — Executable Bidirectional Type & Termination Checker (`0 sorry`)
 - **[`Solutions/Stage1/MiniLeanSized.lean`](Solutions/Stage1/MiniLeanSized.lean) (Stage 1)**:
