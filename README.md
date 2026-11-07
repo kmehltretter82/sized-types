@@ -85,10 +85,10 @@ At the end of [`Solutions/V5/Final.lean`](Solutions/V5/Final.lean), `#print axio
 
 ---
 
-## Roadmap: Next Phases (See [`plan.md`](plan.md))
-
-With the Nisht & Abel (2024) metatheory and inference pipeline fully mechanized in `NishtAbel2024V5`, the remaining phases in [`plan.md`](plan.md) focus on:
-
-1. **Explicit Agda Soundness Regression Suite (Milestone 1.1)**: Standalone negative test files for Agda Issue #3026 ($\infty < \infty$) and Agda Issue #7178 (mixed inductive/coinductive positivity & non-upward-closed codata sizes).
-2. **Verified Elaboration / Lowering Theorem (Milestone 1.2)**: Syntactic translation $\Gamma \vdash_{\text{sized}} t : A \implies \Gamma^\circ \vdash_{\text{Lean}} E(t) : A^\circ$ targeting standard Lean 4 kernel constructs (`brecOn` when spine-structural to preserve `rfl`; `WellFounded.fix` / `Acc` otherwise).
-3. **Executable Bidirectional Prototype & Lean 4 Elaborator Pass (Stages 1, 2A, 2B)**: Turning the relational V5 inference pipeline (`Encode`, `InferPat`, `InferSpine`, `Compare`, `InferTm`, `CheckTm`) alongside the verified executable solver (`solve`, `sizeLtB`, `sizeLeB`) into an executable checker for compositional higher-order termination and computational codata in `Type`.
+### 3. Milestones 1.1 & 1.2: Agda Soundness Benchmarks & Verified Elaboration (`0 sorry`)
+- **[`Solutions/Milestones/Milestone1_1_AgdaBugBenchmarks.lean`](Solutions/Milestones/Milestone1_1_AgdaBugBenchmarks.lean) (Milestone 1.1)**:
+  - **Class A (Agda Issue #3026 — $\infty < \infty$)**: Negative contradiction benchmarks (`agda3026_wf_contradiction`, `agda3026_bad_inductive_contradiction`), operational non-normalization (`agda3026_loop_not_sn`), and positive blocking theorems in `NishtAbel2024V5` (`v5_not_sizeLt_infty_infty`, `v5_sizeLtB_inf_self_false`, `v5_rejects_agda3026_self_instantiation`).
+  - **Class B (Agda Issue #7178 — Mixed Inductive/Coinductive Positivity & Size Variance without $\infty < \infty$)**: Finite-size ($0 < 1$) negative contradiction benchmarks (`agda7178_finite_size_nonpos_subtyping_contradiction`, `agda7178_mutual_ind_coind_variance_contradiction`), positive blocking theorems in `NishtAbel2024V5` (`v5_rejects_negative_functor_at_pos_polarity`, `v5_encode_forbids_shared_mu_nu_size`), and positive acceptance of valid mixed blocks (`v5_accepts_valid_mixed_block`).
+- **[`Solutions/Milestones/Milestone1_2_VerifiedElaboration.lean`](Solutions/Milestones/Milestone1_2_VerifiedElaboration.lean) (Milestone 1.2)**:
+  - **Verified Elaboration & Erasure Theorem (`elaborate_sound_and_coherent`)**: Translates size-checked derivations $\Gamma \vdash_{\text{sized}} t : A$ (including bounded course-of-values recursion `fixNat` and size-preserving `minus`) into standard, size-erased Lean 4 terms $\Gamma^\circ \to A^\circ$ and proves logical-relation coherence with the size-indexed semantics.
+  - **Dual Lowering & Kernel `rfl` Reduction**: Proves semantic equivalence between `WellFounded.fix` lowering and spine-structural lowering (`divStructural_eq_divWF`, `mapRoseSized_erase_eq`), verifies kernel `rfl` reduction on concrete Euclidean division (`divErased_10_2_rfl`) and higher-order rose-tree traversals (`mapRose_rfl_benchmark`), and provides the general SCT mutual-block elaborator (`elaborateSCTBlock`, `elaborateSCTBlock_eq`) powered by `NishtAbel2024V5` Theorem 1 (`callRel_wf`).
