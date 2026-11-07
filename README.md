@@ -58,6 +58,11 @@ We provide a complete, `0 sorry` Lean 4 formalization and soundness proof of **K
 │   ├── V3/
 │   │   ├── SCT/                             # Ultrafilter Infinite Ramsey & SCT well-foundedness proofs
 │   │   └── *.lean                           # V3 proofs, worked example, and DESIGN.md
+│   ├── Milestones/
+│   │   ├── Milestone1_1_AgdaBugBenchmarks.lean  # Mechanized Agda #3026 & #7178 benchmarks + V5 blocking proofs
+│   │   └── Milestone1_2_VerifiedElaboration.lean # Verified elaboration E(t), dual lowering, SCT WF lowering
+│   ├── Stage1/
+│   │   └── MiniLeanSized.lean               # Executable bidirectional size-change checker + soundness + regression suite
 │   └── Audits/                              # Standalone 0-sorry counterexamples to V1/V2 formulations
 ├── docs/
 │   ├── SOUNDNESS_AUDITS_AND_REPAIRS.md      # Synthesis of counterexamples & V5 metatheoretical fixes
@@ -92,3 +97,9 @@ At the end of [`Solutions/V5/Final.lean`](Solutions/V5/Final.lean), `#print axio
 - **[`Solutions/Milestones/Milestone1_2_VerifiedElaboration.lean`](Solutions/Milestones/Milestone1_2_VerifiedElaboration.lean) (Milestone 1.2)**:
   - **Verified Elaboration & Erasure Theorem (`elaborate_sound_and_coherent`)**: Translates size-checked derivations $\Gamma \vdash_{\text{sized}} t : A$ (including bounded course-of-values recursion `fixNat` and size-preserving `minus`) into standard, size-erased Lean 4 terms $\Gamma^\circ \to A^\circ$ and proves logical-relation coherence with the size-indexed semantics.
   - **Dual Lowering & Kernel `rfl` Reduction**: Proves semantic equivalence between `WellFounded.fix` lowering and spine-structural lowering (`divStructural_eq_divWF`, `mapRoseSized_erase_eq`), verifies kernel `rfl` reduction on concrete Euclidean division (`divErased_10_2_rfl`) and higher-order rose-tree traversals (`mapRose_rfl_benchmark`), and provides the general SCT mutual-block elaborator (`elaborateSCTBlock`, `elaborateSCTBlock_eq`) powered by `NishtAbel2024V5` Theorem 1 (`callRel_wf`).
+
+### 4. Stage 1: `MiniLean-Sized` — Executable Bidirectional Type & Termination Checker (`0 sorry`)
+- **[`Solutions/Stage1/MiniLeanSized.lean`](Solutions/Stage1/MiniLeanSized.lean) (Stage 1)**:
+  - **Complete Executable Algorithm 2 Pipeline**: Implements executable boolean/option checkers for `Unsized` (`unsizedB`), polarized higher-kinded kind inference (`inferKindB`, `checkKindB`, `ekindingB`, `allPosFunctorsB`), signature encoding (`encodeTyB`, `encodeDeclB`, `encodeBlockB`), pattern & copattern spine inference (`inferPatB`, `inferSpineB`), bidirectional type comparison with $\beta$-reduction (`compareTyB2`), bidirectional term & clause inference (`inferTmB`, `checkTmB`, `checkClauseB`), and certified Size-Change Termination closure (`checkSCTB`, `checkBlockB`).
+  - **End-to-End Soundness Theorem (`checkBlockB_sound`)**: Proves (`0 sorry`) that `checkBlockB fuel sig Ξ = true` implies `Algorithm2Accepts sig Ξ Ξannot`, declarative typing in System $F_\omega^{\text{cop,SCT}}$ (`BlockTy sig Ξannot`), and semantic strong normalization / productivity (`SemValid W Ξannot` via Theorem 15).
+  - **Kernel-Checked (`rfl`) Regression Suite**: Accepts structural recursion (`test_P1_copy_accepted`), productive stream combinators (`test_P2_streams_accepted`), polymorphic list recursion (`test_P3_len_accepted`), mutual recursion (`test_P4_evenOdd_accepted`), higher-order polymorphic rose-tree traversal (`test_P5_mapRose_accepted`), and mixed-variance $\beta$-redex blocks (`test_P6_evalBush_accepted`), while statically rejecting Agda #3026 (`test_N1_agda3026_rejected`), unguarded streams (`test_N2_nonProductiveStream_rejected`), Agda #7178 negative fixpoints (`test_N3_agda7178_negFix_rejected`), and non-terminating mutual cycles (`test_N4_badMutual_rejected`).

@@ -131,7 +131,11 @@ Only after Tier 1–3 formalizations settle how size irrelevance interacts with 
 - **[COMPLETED] Milestone 1.2: Verified Elaboration / Erasure Theorem & Dual Lowering** ([`Solutions/Milestones/Milestone1_2_VerifiedElaboration.lean`](Solutions/Milestones/Milestone1_2_VerifiedElaboration.lean)):
   - Proved the verified elaboration & logical-relation coherence theorem (`elaborate_sound_and_coherent`) for the intrinsic sized calculus `SizedTm` (including size-bounded course-of-values recursion `fixNat` and size-preserving `minus`).
   - Implemented and proved equivalence of the dual lowering architecture (`divStructural_eq_divWF`, `mapRoseSized_erase_eq`) alongside kernel `rfl` reduction benchmarks (`divErased_10_2_rfl`, `mapRose_rfl_benchmark`) and general SCT mutual-block `WellFounded.fix` elaboration (`elaborateSCTBlock`, `elaborateSCTBlock_eq`).
-- **[NEXT — Local Repo] Stage 1 (`MiniLean-Sized`)**:
-  - Extract executable bidirectional inference functions from V5's relational `Encode`/`InferPat`/`InferSpine`/`Compare`/`InferTm`/`CheckTm` judgments.
+- **[COMPLETED] Stage 1 (`MiniLean-Sized`)** ([`Solutions/Stage1/MiniLeanSized.lean`](Solutions/Stage1/MiniLeanSized.lean)):
+  - Implemented the standalone executable bidirectional type and size-change termination checker (`unsizedB`, `ekindingB`, `encodeBlockB`, `inferPatB`, `inferSpineB`, `compareTyB2`, `inferTmB`, `checkTmB`, `checkClauseB`, `checkSCTB`, `checkBlockB`).
+  - Proved end-to-end soundness (`checkBlockB_sound`, `0 sorry`) connecting `checkBlockB fuel sig Ξ = true` to `Algorithm2Accepts`, `BlockTy`, and `SemValid` (Theorem 15).
+  - Verified the mandatory positive (`P1`–`P6`, including higher-order mutual rose-tree traversal `test_P5_mapRose_accepted` and productive streams `test_P2_streams_accepted`) and negative (`N1`–`N4`, statically rejecting Agda #3026 and Agda #7178) regression suite by kernel `rfl`.
+- **[NEXT — Local Repo] Stage 2A & 2B**:
+  - Integrate the verified size-change solver and dual lowering pipeline (`brecOn` / `WellFounded.fix`) with Lean 4 elaboration and computational coinductive streams in `Type`.
 - **[OPTIONAL — `prove2.me` Literature Track] Milestone 1.3a**:
   - Formalize **Laarakker, Otten & van den Berg (FSCD 2026)** (*Constructing (Co)inductive Types via Large Sizes*).
